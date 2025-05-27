@@ -215,7 +215,7 @@
             min-height: 100vh;
             display: flex;
             align-items: center;
-            background: linear-gradient(135deg, #000000 0%, #0a0a23 25%, #1a1a3a 50%, #2563eb 100%);
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 25%, #2a2a2a 50%, #1e293b 100%);
             overflow: hidden;
         }
         
@@ -227,10 +227,10 @@
             right: 0;
             bottom: 0;
             background: 
-                radial-gradient(circle at 20% 80%, rgba(37, 99, 235, 0.3) 0%, transparent 50%),
-                radial-gradient(circle at 80% 20%, rgba(59, 130, 246, 0.2) 0%, transparent 50%),
-                radial-gradient(circle at 40% 40%, rgba(29, 78, 216, 0.1) 0%, transparent 50%);
-            animation: backgroundPulse 8s ease-in-out infinite alternate;
+                radial-gradient(circle at 20% 80%, rgba(59, 130, 246, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(139, 92, 246, 0.08) 0%, transparent 50%),
+                radial-gradient(circle at 40% 40%, rgba(37, 99, 235, 0.05) 0%, transparent 50%);
+            animation: backgroundPulse 12s ease-in-out infinite alternate;
             z-index: 1;
         }
         
@@ -242,20 +242,216 @@
             right: 0;
             bottom: 0;
             background: 
-                linear-gradient(45deg, transparent 30%, rgba(59, 130, 246, 0.05) 50%, transparent 70%),
-                linear-gradient(-45deg, transparent 30%, rgba(37, 99, 235, 0.05) 50%, transparent 70%);
-            animation: backgroundShift 12s linear infinite;
+                linear-gradient(45deg, transparent 30%, rgba(59, 130, 246, 0.02) 50%, transparent 70%),
+                linear-gradient(-45deg, transparent 30%, rgba(139, 92, 246, 0.02) 50%, transparent 70%);
+            animation: backgroundShift 20s linear infinite;
             z-index: 2;
+        }
+        
+        /* Floating Dots Animation */
+        .floating-dots {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            z-index: 3;
+            pointer-events: none;
+        }
+        
+        .dot {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            animation: float 15s infinite linear;
+        }
+        
+        .dot:nth-child(1) {
+            left: 10%;
+            animation-delay: 0s;
+            animation-duration: 20s;
+            background: rgba(59, 130, 246, 0.4);
+        }
+        
+        .dot:nth-child(2) {
+            left: 20%;
+            animation-delay: 2s;
+            animation-duration: 18s;
+            background: rgba(139, 92, 246, 0.3);
+        }
+        
+        .dot:nth-child(3) {
+            left: 30%;
+            animation-delay: 4s;
+            animation-duration: 22s;
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        .dot:nth-child(4) {
+            left: 40%;
+            animation-delay: 6s;
+            animation-duration: 16s;
+            background: rgba(59, 130, 246, 0.3);
+        }
+        
+        .dot:nth-child(5) {
+            left: 50%;
+            animation-delay: 8s;
+            animation-duration: 24s;
+            background: rgba(139, 92, 246, 0.4);
+        }
+        
+        .dot:nth-child(6) {
+            left: 60%;
+            animation-delay: 10s;
+            animation-duration: 19s;
+            background: rgba(255, 255, 255, 0.25);
+        }
+        
+        .dot:nth-child(7) {
+            left: 70%;
+            animation-delay: 12s;
+            animation-duration: 21s;
+            background: rgba(59, 130, 246, 0.2);
+        }
+        
+        .dot:nth-child(8) {
+            left: 80%;
+            animation-delay: 14s;
+            animation-duration: 17s;
+            background: rgba(139, 92, 246, 0.3);
+        }
+        
+        .dot:nth-child(9) {
+            left: 90%;
+            animation-delay: 16s;
+            animation-duration: 23s;
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        .dot:nth-child(10) {
+            left: 15%;
+            animation-delay: 18s;
+            animation-duration: 20s;
+            background: rgba(59, 130, 246, 0.35);
+        }
+        
+        .dot:nth-child(11) {
+            left: 25%;
+            animation-delay: 1s;
+            animation-duration: 25s;
+            background: rgba(139, 92, 246, 0.25);
+        }
+        
+        .dot:nth-child(12) {
+            left: 35%;
+            animation-delay: 3s;
+            animation-duration: 18s;
+            background: rgba(255, 255, 255, 0.3);
+        }
+        
+        .dot:nth-child(13) {
+            left: 45%;
+            animation-delay: 5s;
+            animation-duration: 22s;
+            background: rgba(59, 130, 246, 0.25);
+        }
+        
+        .dot:nth-child(14) {
+            left: 55%;
+            animation-delay: 7s;
+            animation-duration: 19s;
+            background: rgba(139, 92, 246, 0.35);
+        }
+        
+        .dot:nth-child(15) {
+            left: 65%;
+            animation-delay: 9s;
+            animation-duration: 21s;
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        .dot:nth-child(16) {
+            left: 75%;
+            animation-delay: 11s;
+            animation-duration: 24s;
+            background: rgba(59, 130, 246, 0.3);
+        }
+        
+        .dot:nth-child(17) {
+            left: 85%;
+            animation-delay: 13s;
+            animation-duration: 17s;
+            background: rgba(139, 92, 246, 0.4);
+        }
+        
+        .dot:nth-child(18) {
+            left: 95%;
+            animation-delay: 15s;
+            animation-duration: 20s;
+            background: rgba(255, 255, 255, 0.25);
+        }
+        
+        .dot:nth-child(19) {
+            left: 5%;
+            animation-delay: 17s;
+            animation-duration: 23s;
+            background: rgba(59, 130, 246, 0.2);
+        }
+        
+        .dot:nth-child(20) {
+            left: 12%;
+            animation-delay: 19s;
+            animation-duration: 18s;
+            background: rgba(139, 92, 246, 0.3);
+        }
+        
+        /* Large floating particles */
+        .dot.large {
+            width: 8px;
+            height: 8px;
+            opacity: 0.6;
+        }
+        
+        .dot:nth-child(3n) {
+            width: 6px;
+            height: 6px;
+        }
+        
+        .dot:nth-child(5n) {
+            width: 8px;
+            height: 8px;
+            opacity: 0.4;
+        }
+        
+        @keyframes float {
+            0% {
+                transform: translateY(100vh) translateX(0px) rotate(0deg);
+                opacity: 0;
+            }
+            10% {
+                opacity: 1;
+            }
+            90% {
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(-100px) translateX(100px) rotate(360deg);
+                opacity: 0;
+            }
         }
         
         @keyframes backgroundPulse {
             0% { 
-                opacity: 0.7; 
+                opacity: 0.3; 
                 transform: scale(1) rotate(0deg);
             }
             100% { 
-                opacity: 1; 
-                transform: scale(1.1) rotate(5deg);
+                opacity: 0.6; 
+                transform: scale(1.05) rotate(2deg);
             }
         }
         
@@ -694,6 +890,28 @@
     
     <!-- Hero Section -->
     <section class="hero">
+        <div class="floating-dots">
+            <div class="dot"></div>
+            <div class="dot"></div>
+            <div class="dot"></div>
+            <div class="dot"></div>
+            <div class="dot"></div>
+            <div class="dot"></div>
+            <div class="dot"></div>
+            <div class="dot"></div>
+            <div class="dot"></div>
+            <div class="dot"></div>
+            <div class="dot"></div>
+            <div class="dot"></div>
+            <div class="dot"></div>
+            <div class="dot"></div>
+            <div class="dot"></div>
+            <div class="dot"></div>
+            <div class="dot"></div>
+            <div class="dot"></div>
+            <div class="dot"></div>
+            <div class="dot"></div>
+        </div>
         <div class="container">
             <div class="hero-content">
                 <div class="hero-text">
