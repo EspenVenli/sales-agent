@@ -1,0 +1,428 @@
+import Fastify from 'fastify';
+import WebSocket from 'ws';
+import fs from 'fs';
+import dotenv from 'dotenv';
+import fastifyFormBody from '@fastify/formbody';
+import fastifyWs from '@fastify/websocket';
+import fastifyStatic from '@fastify/static';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import twilio from 'twilio';
+import { dirname, join } from 'path';
+
+// Get current directory for static file serving
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load environment variables from .env file
+dotenv.config();
+
+// Retrieve the OpenAI API key, Twilio Account Credentials, outgoing phone number, and public domain address from environment variables.
+const {
+  TWILIO_ACCOUNT_SID,
+  TWILIO_AUTH_TOKEN,
+  PHONE_NUMBER_FROM,
+  DOMAIN: rawDomain,
+  OPENAI_API_KEY,
+} = process.env;
+
+// Constants
+const DOMAIN = rawDomain.replace(/(^\w+:|^)\/\//, '').replace(/\/+$/, ''); // Clean protocols and slashes
+const SYSTEM_MESSAGE = 'You are a wildly enthusiastic travel concierge who is PASSIONATE about helping people discover amazing travel experiences. Your name is Cleo. Speak with energy, excitement and genuine enthusiasm. Use lots of vocal variety - higher pitch for exciting parts, dramatic pauses, and vary your speaking rhythm. Insert occasional excited gasps or laughs where appropriate. Sprinkle in phrases like "I\'m so excited about this!", "This is absolutely incredible!", or "You\'re going to LOVE this!" Use vivid, colorful language to describe destinations. After learning about the caller\'s preferences, be sure to ask if they\'ve figured out lodging, then offer to text them a link to Venli for their itinerary.';
+const VOICE = 'coral'; // Options include: alloy, ash, ballad, coral, echo, sage, shimmer, and verse
+const PORT = process.env.PORT || 6060; // Allow dynamic port assignment
+
+// List of Event Types to log to the console. See the OpenAI Realtime API Documentation.
+const LOG_EVENT_TYPES = [
+    'error',
+    'response.content.done',
+    'rate_limits.updated',
+    'response.done',
+    'input_audio_buffer.committed',
+    'input_audio_buffer.speech_stopped',
+    'input_audio_buffer.speech_started',
+    'session.created'
+];
+if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !PHONE_NUMBER_FROM || !rawDomain || !OPENAI_API_KEY) {
+  console.error('One or more environment variables are missing. Please ensure TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, PHONE_NUMBER_FROM, DOMAIN, and OPENAI_API_KEY are set.');
+  process.exit(1);
+}
+
+// Initialize Twilio client
+const client = twilio(
+  TWILIO_ACCOUNT_SID,
+  TWILIO_AUTH_TOKEN
+);
+
+// Function to check if a number is allowed to be called. With your own function, be sure 
+// to do your own diligence to be compliant.
+async function isNumberAllowed(to) {
+  try {
+
+    // Allow specific test numbers
+    const allowedNumbers = {
+      "+18064251145": true, // Your Twilio number
+      "+4531219653": true,  // Danish number
+      "+19472176285": true  // US number
+    };
+    
+    if (allowedNumbers[to]) {
+      return true;
+    }
+
+    // Check if the number is a Twilio phone number in the account, for example, when making a call to the Twilio Dev Phone
+    const incomingNumbers = await client.incomingPhoneNumbers.list({ phoneNumber: to });
+    if (incomingNumbers.length > 0) {
+      return true;
+    }
+
+    // Check if the number is a verified outgoing caller ID. https://www.twilio.com/docs/voice/api/outgoing-caller-ids
+    const outgoingCallerIds = await client.outgoingCallerIds.list({ phoneNumber: to });
+    if (outgoingCallerIds.length > 0) {
+      return true;
+    }
+
+    return false;
+  } catch (error) {
+    console.error('Error checking phone number:', error);
+    return false;
+  }
+}
+
+// Function to make an outbound call (Restored Version using /twiml URL)
+async function makeCall(to) {
+  try {
+    const isAllowed = await isNumberAllowed(to);
+    if (!isAllowed) {
+      console.warn(`The number ${to} is not recognized as a valid outgoing number or caller ID.`);
+      // Consider returning an error instead of exiting
+      return null; // Indicate failure
+    }
+
+    console.log(`DOMAIN: ${DOMAIN}`);
+    console.log(`TwiML endpoint URL: https://${DOMAIN}/twiml`);
+
+    // Standard approach for all calls - use the TwiML URL
+    const call = await client.calls.create({
+      from: PHONE_NUMBER_FROM,
+      to,
+      url: `https://${DOMAIN}/twiml`, 
+      statusCallback: `https://${DOMAIN}/call-status`,
+      // Only request essential status updates
+      statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed'],
+      statusCallbackMethod: 'POST'
+    });
+    
+    console.log(`Call initiated with SID: ${call.sid}`);
+    
+    return call;
+  } catch (error) {
+    console.error('Error making call:', error);
+    return null; // Indicate failure
+  }
+}
+
+// Initialize Fastify
+const fastify = Fastify();
+fastify.register(fastifyFormBody);
+fastify.register(fastifyWs);
+
+// Register static file serving for the dashboard
+fastify.register(fastifyStatic, {
+  root: path.join(__dirname, 'public'),
+  prefix: '/'
+});
+
+// Store active calls and status clients
+const activeWebSockets = new Map();
+const statusClients = new Set();
+
+// Track conversation for debugging
+const callLogs = new Map();
+
+// Routes
+fastify.get('/', async (request, reply) => {
+    return reply.redirect('/dashboard.html');
+});
+
+// WebSocket route for media-stream
+fastify.register(async (fastify) => {
+    fastify.get('/media-stream', { websocket: true }, (connection, req) => {
+        const connectionId = Math.random().toString(36).substring(2, 10);
+        console.log(`>>> /media-stream: Client connected [ID: ${connectionId}]`);
+
+        // --- Log the connection object structure --- 
+        console.log(`[${connectionId}] Connection object type: ${typeof connection}`);
+        if (connection && typeof connection.on === 'function') { // Check if it looks like a WebSocket object
+            console.log(`[${connectionId}] Connection object IS the WebSocket.`);
+        } else {
+            console.error(`[${connectionId}] FATAL: Received connection object is NOT a valid WebSocket. Keys: ${connection ? Object.keys(connection) : 'N/A'}`);
+            // Attempt to close if possible, though it might not be a socket
+            if(connection && typeof connection.close === 'function') { try { connection.close(); } catch(e){} }
+            return;
+        }
+        // --- End logging ---
+
+        let callSid = null;
+        let openAiWs = null;
+        let streamSid = null;
+        let callActive = false;
+
+        // --- Setup Twilio Socket Listeners FIRST (using 'connection' directly) ---
+        console.log(`[${connectionId}] Attaching listeners to Twilio socket (connection object)...`);
+        
+        connection.on('message', (message) => {
+             try {
+                 const data = JSON.parse(message.toString());
+                 switch (data.event) {
+                     case 'start':
+                         streamSid = data.start.streamSid;
+                         callSid = data.start.callSid || data.start.customParameters?.callSid;
+                         console.log(`[${connectionId}] Incoming stream start event. Stream SID: ${streamSid}, Call SID: ${callSid}`);
+                         if (!callSid) { 
+                            console.error(`[${connectionId}] No callSid found in start event`);
+                            try { connection.close(1011, 'No CallSid provided'); } catch(e){} 
+                            return; 
+                         }
+                         // Use 'connection' directly as the socket
+                         activeWebSockets.set(callSid, connection); 
+                         callActive = true;
+                         broadcastStatus(callSid, 'Call connected, media stream started');
+                         
+                         // Initiate OpenAI connection *after* getting callSid
+                         console.log(`[${connectionId}][${callSid}] Initiating OpenAI connection now...`);
+                         setupOpenAIConnection(); 
+                         break;
+                     case 'media':
+                         if (!callSid || !callActive) { return; }
+                         if (openAiWs && openAiWs.readyState === WebSocket.OPEN) { 
+                            const audioAppend = { type: 'input_audio_buffer.append', audio: data.media.payload };
+                            openAiWs.send(JSON.stringify(audioAppend));
+                         }
+                         break;
+                     default:
+                         console.log(`[${connectionId}] Received non-media event:`, data.event);
+                         if (callSid) { broadcastStatus(callSid, `Received event: ${data.event}`); } 
+                         break;
+                 }
+             } catch (error) {
+                 console.error(`[${connectionId}] Error parsing Twilio message:`, error.message);
+                 if (callSid) { broadcastStatus(callSid, `Error parsing Twilio message: ${error.message}`); }
+             }
+        });
+
+        connection.on('close', (code, reason) => {
+             console.error(`[${connectionId}] $$$ TWILIO SOCKET CLOSED EVENT $$$ Code: ${code}, Reason: ${reason ? reason.toString() : 'N/A'}`);
+            if (openAiWs && openAiWs.readyState !== WebSocket.CLOSED) {
+                try{ openAiWs.close(); } catch(e){} 
+            }
+            if (callSid) {
+                activeWebSockets.delete(callSid);
+                callActive = false;
+                broadcastStatus(callSid, 'Twilio socket closed');
+            }
+        });
+
+        connection.on('error', (error) => {
+            console.error(`[${connectionId}] $$$ TWILIO SOCKET ERROR EVENT $$$ Error: ${error.message}`);
+            console.error(error.stack); 
+            if (openAiWs && openAiWs.readyState !== WebSocket.CLOSED) {
+                 try{ openAiWs.close(); } catch(e){} 
+            }
+             if (callSid) {
+                 activeWebSockets.delete(callSid);
+                 callActive = false;
+                 broadcastStatus(callSid, `Twilio WebSocket error: ${error.message}`);
+             }
+        });
+        
+        console.log(`[${connectionId}] Twilio WebSocket event listeners attached.`);
+
+        // --- Define OpenAI Setup Function (needs to use 'connection' to send back audio) ---
+        const setupOpenAIConnection = () => {
+             if (openAiWs) { // Avoid re-initializing if already done
+                  console.log(`[${connectionId}][${callSid}] OpenAI connection already initialized.`);
+                  // If it's already open, send session update
+                  if (openAiWs.readyState === WebSocket.OPEN && callSid && callActive) {
+                       setTimeout(sendInitialSessionUpdate, 100);
+                  }
+                  return;
+             }
+             
+             try {
+                console.log(`[${connectionId}][${callSid}] Attempting to create OpenAI WebSocket connection...`);
+                openAiWs = new WebSocket('wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01', {
+                    headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, "OpenAI-Beta": "realtime=v1" }
+                });
+                console.log(`[${connectionId}][${callSid}] OpenAI WebSocket object created.`);
+
+                openAiWs.on('open', () => {
+                    console.log(`[${connectionId}][${callSid}] OpenAI WebSocket connected successfully.`);
+                    // Send session.create first instead of session.update
+                    if (callSid && callActive) {
+                        console.log(`[${connectionId}][${callSid}] Sending session.create message to OpenAI`);
+                        const sessionCreate = {
+                            type: 'session.create'
+                        };
+                        openAiWs.send(JSON.stringify(sessionCreate));
+                        broadcastStatus(callSid, 'Sending session.create to OpenAI');
+                    }
+                });
+
+                openAiWs.on('message', (data) => {
+                    try {
+                        if (!callSid || !callActive) { console.warn(`[${connectionId}] OpenAI message ignored, call not active.`); return; }
+                        
+                        // Parse the message data string into a JSON object
+                        const response = JSON.parse(data.toString());
+                        console.log(`[${connectionId}][${callSid}] Received OpenAI event: ${response.type}`);
+                        
+                        if (response.type === 'session.created') {
+                            console.log(`[${connectionId}][${callSid}] Session created successfully. Sending session update.`);
+                            broadcastStatus(callSid, 'OpenAI session created. Sending update...');
+                            
+                            // Now send the session.update after receiving session.created
+                            const sessionUpdate = {
+                                type: 'session.update',
+                                session: {
+                                    turn_detection: { type: 'server_vad' },
+                                    input_audio_format: { codec: 'pcm_mulaw', sample_rate: 8000 },
+                                    output_audio_format: { codec: 'pcm_mulaw', sample_rate: 8000 },
+                                    voice: VOICE,
+                                    instructions: SYSTEM_MESSAGE,
+                                    modalities: ["audio", "text"],  // Changed order to audio first
+                                    temperature: 1.0,
+                                    metadata: { callSid: callSid }
+                                }
+                            };
+                            console.log(`[${connectionId}][${callSid}] Sending OpenAI session.update payload:`, JSON.stringify(sessionUpdate, null, 2));
+                            openAiWs.send(JSON.stringify(sessionUpdate));
+                            broadcastStatus(callSid, 'Sending session update to OpenAI');
+                        }
+                        else if (response.type === 'audio.chunk') {
+                            // Handle audio data
+                            if (connection && connection.readyState === WebSocket.OPEN) {
+                               const audioDelta = { event: 'media', streamSid: streamSid, media: { payload: Buffer.from(response.chunk, 'base64').toString('base64') } };
+                               connection.send(JSON.stringify(audioDelta));
+                            } else {
+                               console.warn(`[${connectionId}][${callSid}] Twilio socket (connection) not open, cannot send audio delta.`);
+                            }
+                        } else if (response.type === 'error') { 
+                           // Log the specific error details received from OpenAI
+                           console.error(`[${connectionId}][${callSid}] *** Received OpenAI Error Message ***:`, JSON.stringify(response, null, 2));
+                           if (callSid) { broadcastStatus(callSid, `OpenAI error event: ${response.error?.message || 'Unknown error'}`); }
+                           // Close the connection upon receiving an error message from OpenAI
+                           if (connection && connection.readyState === WebSocket.OPEN) {
+                                try { connection.close(1011, `OpenAI error: ${response.error?.message || 'Unknown'}`); } catch (e) {}
+                           }
+                           if (openAiWs && openAiWs.readyState === WebSocket.OPEN) {
+                                try { openAiWs.close(1011, `Received error event`); } catch (e) {}
+                           }
+                        }
+                        else if (response.type === 'session.updated') {
+                           console.log(`[${connectionId}][${callSid}] Session updated successfully. Ready for conversation.`);
+                           broadcastStatus(callSid, 'Session updated. AI agent is ready!');
+                           // We don't need to send anything here - the AI will start responding to audio input
+                        }
+                    } catch (error) {
+                        console.error(`[${connectionId}][${callSid}] Error handling OpenAI message:`, error.message);
+                        broadcastStatus(callSid, `Error handling OpenAI message: ${error.message}`);
+                    }
+                });
+
+                openAiWs.on('close', () => {
+                    console.log(`[${connectionId}][${callSid}] OpenAI WebSocket closed.`);
+                    if (callSid) {
+                        activeWebSockets.delete(callSid);
+                        callActive = false;
+                        broadcastStatus(callSid, 'OpenAI WebSocket closed');
+                    }
+                });
+
+                openAiWs.on('error', (error) => {
+                     // Update error handling to close 'connection' if needed
+                     console.error(`[${connectionId}][${callSid}] $$$ OpenAI WebSocket ERROR Event $$$:`, error); // Log the full error object
+                     // Log specific properties if they exist
+                     if (error && error.message) {
+                        console.error(`[${connectionId}][${callSid}] OpenAI Error Message: ${error.message}`);
+                     }
+                     if (error && error.code) {
+                         console.error(`[${connectionId}][${callSid}] OpenAI Error Code: ${error.code}`);
+                     }
+                     // Optionally log the stack trace if available
+                     if (error && error.stack) {
+                        // console.error(`[${connectionId}][${callSid}] OpenAI Error Stack: ${error.stack}`);
+                     }
+
+                     if (callSid) { broadcastStatus(callSid, `OpenAI error: ${error.message || 'Unknown error'}`); }
+                     if (connection && connection.readyState === WebSocket.OPEN) {
+                          try { connection.close(1011, 'OpenAI error'); } catch (e) {}
+                     }
+                });
+
+             } catch (error) {
+                console.error(`[${connectionId}][${callSid}] Error in OpenAI connection setup:`, error.message);
+                broadcastStatus(callSid, `Error in OpenAI connection setup: ${error.message}`);
+             }
+        }; // End of setupOpenAIConnection function
+
+    }); // End of websocket handler
+}); // End of fastify register for /media-stream
+
+// WebSocket route for status monitoring
+fastify.register(async (fastify) => {
+    fastify.get('/status-monitor', { websocket: true }, (connection, req) => {
+        const monitorId = Math.random().toString(36).substring(2, 10);
+        console.log(`Status monitor client connected [ID: ${monitorId}]`);
+        
+        // Delay processing slightly to allow connection object to fully initialize
+        setTimeout(() => {
+            const socket = connection.socket || connection; // Try connection.socket first, fallback to connection
+            
+            try {
+                console.log(`[${monitorId}] After delay - Attempting to use socket type: ${typeof socket}`);
+                console.log(`[${monitorId}] After delay - Socket readyState: ${socket ? socket.readyState : 'N/A'}`);
+                
+                if (socket && typeof socket.on === 'function') { // Check if it looks like a WebSocket
+                    console.log(`[${monitorId}] Successfully obtained socket object after delay.`);
+                    
+                    // Add the socket to the status clients
+                    statusClients.add(socket);
+                    
+                    // Send initial status
+                    const statusData = {
+                        activeCalls: Array.from(callLogs.entries()).map(([callSid, logs]) => ({
+                            callSid,
+                            logs: logs.slice(-10),
+                            active: activeWebSockets.has(callSid)
+                        }))
+                    };
+                    
+                    if (socket.readyState === WebSocket.OPEN) {
+                        try {
+                            socket.send(JSON.stringify(statusData));
+                            console.log(`[${monitorId}] Sent initial status data to client`);
+                        } catch (err) {
+                            console.error(`[${monitorId}] Error sending initial status:`, err.message);
+                        }
+                    } else {
+                        console.warn(`[${monitorId}] Socket is not open, cannot send initial status.`);
+                    }
+                } else {
+                    console.error(`[${monitorId}] Failed to obtain a valid socket object after delay.`);
+                }
+            } catch (err) {
+                console.error(`[${monitorId}] Error during initial status setup:`, err.message);
+            }
+        }, 100);
+    });
+});
+
+// Start the server
+fastify.listen(PORT, '0.0.0.0', (err, address) => {
+    if (err) {
+        console.error(err);
+        process.exit(1);
+    }
+    console.log(`Server is now listening on ${address}`);
+});

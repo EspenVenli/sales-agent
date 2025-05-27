@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: phone-agent
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: npm install
+    startCommand: node index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 6060
+      - key: DOMAIN
+        value: phone-agent-4v5a.onrender.com
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: PHONE_NUMBER_FROM
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+    autoDeploy: true

@@ -1,0 +1,1511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Venli Phone Agent | AI-Powered Calling Assistant</title>
+    <meta name="description" content="Experience Venli's AI Phone Agent - an intelligent calling assistant that connects you with personalized service through natural conversation.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            /* Modern Color Palette */
+            --background-dark: #080D23;
+            --background-secondary: #0E172E;
+            --text-primary: rgba(241, 245, 249, 0.95);
+            --text-secondary: rgba(241, 245, 249, 0.85);
+            --text-muted: rgba(241, 245, 249, 0.6);
+            
+            --primary-blue: #3D85FF;
+            --primary-blue-light: #4E7CFF;
+            --primary-blue-dark: #0066FF;
+            --accent-purple: #8A5FFF;
+            
+            --glass-bg: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.15);
+            --glass-hover: rgba(255, 255, 255, 0.1);
+            
+            --success: #00CC88;
+            --error: #FF4D4D;
+            --warning: #FFCC00;
+            
+            /* Shadows & Effects */
+            --shadow-glass: 0 8px 32px rgba(0, 0, 0, 0.3);
+            --shadow-glow: 0 0 30px rgba(61, 133, 255, 0.3);
+            --blur-amount: 12px;
+            
+            /* Transitions */
+            --transition-smooth: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            --transition-bounce: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--background-dark);
+            color: var(--text-primary);
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            overflow-x: hidden;
+            position: relative;
+        }
+        
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(circle at 15% 15%, rgba(61, 133, 255, 0.05) 0%, transparent 40%),
+                radial-gradient(circle at 85% 85%, rgba(138, 95, 255, 0.07) 0%, transparent 40%);
+            z-index: -1;
+            animation: pulse-bg 10s infinite alternate ease-in-out;
+        }
+        
+        @keyframes pulse-bg {
+            0% { opacity: 0.7; transform: scale(1); }
+            100% { opacity: 1; transform: scale(1.1); }
+        }
+        
+        /* ===== ANIMATIONS ===== */
+        @keyframes shimmer {
+            0% { background-position: 0% 0; }
+            100% { background-position: 200% 0; }
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0) rotate(0); }
+            50% { transform: translate(-20px, -30px) rotate(180deg); }
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 0.05; transform: scale(1); }
+            50% { opacity: 0.2; transform: scale(1.2); }
+            100% { opacity: 0.05; transform: scale(1); }
+        }
+        
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        @keyframes gradient-shift {
+            0% { background-position: 0% 50%; }
+            100% { background-position: 100% 50%; }
+        }
+        
+        @keyframes glow-pulse {
+            0% { opacity: 0.3; transform: scale(0.8); }
+            100% { opacity: 0.6; transform: scale(1); }
+        }
+        
+        /* ===== LAYOUT ===== */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px;
+            position: relative;
+            z-index: 10;
+        }
+        
+        header {
+            background-color: rgba(8, 13, 35, 0.9);
+            backdrop-filter: blur(var(--blur-amount));
+            -webkit-backdrop-filter: blur(var(--blur-amount));
+            position: fixed;
+            width: 100%;
+            z-index: 1000;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--glass-border);
+            transition: var(--transition-smooth);
+        }
+        
+        header.scrolled {
+            background-color: rgba(8, 13, 35, 0.95);
+            box-shadow: var(--shadow-glass);
+        }
+        
+        header .container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 2rem;
+        }
+        
+        .header-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(var(--blur-amount));
+            color: var(--text-primary);
+            text-decoration: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 14px;
+            transition: var(--transition-smooth);
+            border: 1px solid var(--glass-border);
+        }
+        
+        .header-button i {
+            font-size: 12px;
+            transition: var(--transition-smooth);
+        }
+        
+        .header-button:hover {
+            background: var(--glass-hover);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-glow);
+            border-color: var(--primary-blue);
+        }
+        
+        .header-button:hover i {
+            transform: translateX(3px);
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 800;
+            font-size: 26px;
+            color: var(--text-primary);
+            text-decoration: none;
+            position: relative;
+            transition: var(--transition-smooth);
+        }
+        
+        .logo:hover {
+            transform: scale(1.05);
+        }
+        
+        .logo-icon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: auto;
+            height: auto;
+        }
+        
+        .logo-icon img {
+            max-width: 100%;
+            height: auto;
+            max-height: 40px;
+            width: auto;
+            object-fit: contain;
+            filter: drop-shadow(0 0 10px rgba(61, 133, 255, 0.3));
+        }
+        
+        .logo span {
+            background: linear-gradient(135deg, var(--text-primary), var(--primary-blue));
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            transition: var(--transition-smooth);
+        }
+        
+        .hero {
+            padding-top: 6rem;
+            min-height: 100vh;
+            position: relative;
+            overflow: hidden;
+            margin-top: 0;
+            margin-bottom: 0;
+            display: flex;
+            align-items: center;
+            background: linear-gradient(180deg, rgba(8, 13, 35, 0.97) 0%, rgba(14, 23, 46, 0.97) 100%);
+        }
+        
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(circle at 15% 15%, rgba(61, 133, 255, 0.05) 0%, transparent 40%),
+                radial-gradient(circle at 85% 85%, rgba(138, 95, 255, 0.07) 0%, transparent 40%);
+            z-index: 0;
+            opacity: 0.8;
+            animation: pulse-bg 10s infinite alternate ease-in-out;
+        }
+        
+        /* Add floating geometric shapes */
+        .tech-shapes {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            z-index: 3;
+            pointer-events: none;
+        }
+        
+        .shape {
+            position: absolute;
+            opacity: 0.15;
+            animation: float 25s linear infinite;
+        }
+        
+        .shape:nth-child(1) {
+            width: 150px;
+            height: 150px;
+            border: 2px solid rgba(61, 133, 255, 0.3);
+            border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
+            top: 20%;
+            left: 10%;
+            animation-delay: 0s;
+        }
+        
+        .shape:nth-child(2) {
+            width: 100px;
+            height: 100px;
+            border: 2px solid rgba(98, 151, 255, 0.3);
+            border-radius: 58% 42% 38% 62% / 42% 55% 45% 58%;
+            top: 60%;
+            left: 75%;
+            animation-delay: 5s;
+        }
+        
+        .shape:nth-child(3) {
+            width: 80px;
+            height: 80px;
+            border: 2px solid rgba(0, 102, 255, 0.4);
+            border-radius: 50%;
+            top: 40%;
+            left: 85%;
+            animation-delay: 8s;
+        }
+        
+        /* Radial glow spots */
+        .glow-spot {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(40px);
+            opacity: 0.15;
+            background: radial-gradient(circle, rgba(61, 133, 255, 0.8) 0%, rgba(61, 133, 255, 0) 70%);
+            animation: pulse 8s ease-in-out infinite alternate;
+        }
+        
+        .glow-spot:nth-child(1) {
+            width: 300px;
+            height: 300px;
+            left: 20%;
+            top: 30%;
+            animation-delay: 0s;
+        }
+        
+        .glow-spot:nth-child(2) {
+            width: 200px;
+            height: 200px;
+            right: 25%;
+            bottom: 20%;
+            animation-delay: 2s;
+        }
+        
+        .hero-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            max-width: 1300px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 0 2rem;
+            position: relative;
+            z-index: 10;
+            margin-top: -4rem;
+        }
+        
+        .hero-content-wrapper {
+            display: flex;
+            flex-direction: row;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 2rem;
+            position: relative;
+            z-index: 5;
+            gap: 0;
+        }
+        
+        .hero-content {
+            flex: 1 0 60%;
+            max-width: 60%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: flex-start;
+            text-align: left;
+            position: relative;
+            z-index: 10;
+            padding-top: 1rem;
+            padding-right: 2rem;
+        }
+        
+        .hero-title {
+            font-size: 3.6rem;
+            font-weight: 800;
+            line-height: 1.15;
+            margin-bottom: 1.5rem;
+            letter-spacing: -0.02em;
+            max-width: 100%;
+            white-space: normal;
+            color: var(--text-primary);
+        }
+        
+        .shimmer-effect {
+            position: relative;
+            display: inline-block;
+            background: linear-gradient(
+                90deg,
+                var(--primary-blue-dark) 0%,
+                #FFFFFF 25%,
+                var(--primary-blue-dark) 50%,
+                #FFFFFF 75%,
+                var(--primary-blue-dark) 100%
+            );
+            background-size: 200% auto;
+            color: transparent;
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: shimmer 8s ease-in-out infinite;
+            will-change: background-position;
+        }
+        
+        .hero-subtitle {
+            font-size: 1.4rem;
+            font-weight: 400;
+            color: var(--text-secondary);
+            margin-bottom: 2.2rem;
+            max-width: 100%;
+            line-height: 1.5;
+        }
+        
+        .hero-right-section {
+            flex: 1 0 40%;
+            max-width: 40%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            margin-right: 0;
+            margin-top: 6rem;
+        }
+        
+        .hero-form-container {
+            position: relative;
+            width: 100%;
+            max-width: 650px;
+            margin: 0 auto;
+            padding: 0 1rem;
+        }
+        
+        .hero-form {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            backdrop-filter: blur(var(--blur-amount));
+            -webkit-backdrop-filter: blur(var(--blur-amount));
+            padding: 3rem;
+            border-radius: 24px;
+            box-shadow: var(--shadow-glass);
+            position: relative;
+            z-index: 2;
+            overflow: hidden;
+            transition: var(--transition-smooth);
+        }
+        
+        .hero-form::before {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            background: linear-gradient(135deg, var(--primary-blue), var(--accent-purple), var(--primary-blue));
+            z-index: -1;
+            border-radius: 24px;
+            background-size: 400% 400%;
+            animation: gradient-shift 10s ease infinite;
+            opacity: 0.3;
+        }
+        
+        .hero-form:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--shadow-glass), var(--shadow-glow);
+            border-color: var(--primary-blue);
+        }
+        
+        .hero-form h2 {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 2rem;
+            text-align: center;
+            color: var(--text-primary);
+            background: linear-gradient(135deg, var(--text-primary), var(--primary-blue));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            letter-spacing: 0.5px;
+        }
+        
+        .input-wrapper {
+            position: relative;
+        }
+        
+        .input-icon {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            transition: var(--transition-smooth);
+        }
+        
+        input, select {
+            width: 100%;
+            padding: 1rem 1rem 1rem 3rem;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            font-size: 16px;
+            color: var(--text-primary);
+            font-family: inherit;
+            transition: var(--transition-smooth);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+        }
+        
+        input::placeholder {
+            color: var(--text-muted);
+        }
+        
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--primary-blue);
+            box-shadow: 0 0 0 3px rgba(61, 133, 255, 0.2);
+            background: var(--glass-hover);
+        }
+        
+        input:focus + .input-icon, select:focus + .input-icon {
+            color: var(--primary-blue);
+        }
+        
+        select {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%2364748B' height='24' width='24' viewBox='0 0 24 24'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 16px center;
+            padding-right: 48px;
+        }
+        
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem 2rem;
+            border-radius: 16px;
+            font-weight: 600;
+            font-size: 1.1rem;
+            transition: var(--transition-smooth);
+            border: none;
+            outline: none;
+            cursor: pointer;
+            white-space: nowrap;
+            letter-spacing: 0.03em;
+            width: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-blue) 0%, var(--primary-blue-dark) 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(61, 133, 255, 0.4), 
+                        inset 0 1px 1px rgba(255, 255, 255, 0.2);
+        }
+        
+        .btn-primary::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: 0.5s;
+        }
+        
+        .btn-primary:hover::before {
+            left: 100%;
+        }
+        
+        .btn-primary:hover {
+            background: linear-gradient(135deg, var(--primary-blue-light) 0%, var(--primary-blue) 100%);
+            box-shadow: var(--shadow-glow);
+            transform: translateY(-3px);
+        }
+        
+        .btn:active {
+            transform: translateY(0);
+        }
+        
+        .btn-icon {
+            margin-left: 8px;
+            font-size: 16px;
+            transition: var(--transition-normal);
+        }
+        
+        .btn:hover .btn-icon {
+            transform: translateX(4px);
+        }
+        
+        .loading {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: var(--white);
+            animation: spin 1s linear infinite;
+            margin-left: 12px;
+        }
+        
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        
+        .checkbox-group input[type="checkbox"] {
+            width: auto;
+            padding: 0;
+            margin: 0;
+            transform: scale(1.2);
+            accent-color: var(--accent);
+        }
+        
+        .checkbox-group label {
+            margin: 0;
+            font-size: 14px;
+            font-weight: 500;
+            text-transform: none;
+            letter-spacing: normal;
+            cursor: pointer;
+        }
+        
+        .radio-group {
+            display: flex;
+            gap: 24px;
+            margin-bottom: 16px;
+        }
+        
+        .radio-option {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .radio-option input[type="radio"] {
+            width: auto;
+            padding: 0;
+            margin: 0;
+            transform: scale(1.2);
+            accent-color: var(--accent);
+        }
+        
+        .radio-option label {
+            margin: 0;
+            font-size: 14px;
+            font-weight: 500;
+            text-transform: none;
+            letter-spacing: normal;
+            cursor: pointer;
+        }
+        
+        .travel-details {
+            background: rgba(6, 16, 31, 0.3);
+            border: 1px solid rgba(100, 116, 139, 0.2);
+            border-radius: var(--radius-md);
+            padding: 24px;
+            margin-top: 16px;
+            display: none;
+            transition: all 0.3s ease;
+        }
+        
+        .travel-details.show {
+            display: block;
+            animation: fadeUp 0.3s ease;
+        }
+        
+        .travel-details h3 {
+            margin: 0 0 20px 0;
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--light);
+        }
+        
+        .date-row {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+        
+        .airport-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+        
+        @media (max-width: 768px) {
+            .date-row,
+            .airport-row {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+            
+            .radio-group {
+                flex-direction: column;
+                gap: 12px;
+            }
+        }
+        
+        .status {
+            margin-top: 24px;
+            padding: 16px;
+            border-radius: var(--radius-md);
+            display: none;
+            text-align: center;
+            font-weight: 500;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        .success {
+            background: rgba(0, 204, 136, 0.1);
+            color: var(--success);
+            border: 1px solid rgba(0, 204, 136, 0.2);
+        }
+        
+        .error {
+            background: rgba(255, 77, 77, 0.1);
+            color: var(--error);
+            border: 1px solid rgba(255, 77, 77, 0.2);
+        }
+        
+        .form-group small {
+            display: block;
+            margin-top: 4px;
+            color: var(--text-muted);
+            font-size: 12px;
+            opacity: 0.7;
+        }
+        
+        .features {
+            padding: 100px 0;
+            position: relative;
+        }
+        
+        .section-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 2rem;
+            position: relative;
+            display: inline-block;
+            background: linear-gradient(135deg, var(--light), var(--accent-light));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            color: transparent;
+        }
+        
+        .section-subtitle {
+            text-align: center;
+            font-size: 18px;
+            color: var(--gray-300);
+            margin-bottom: 64px;
+            max-width: 700px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 32px;
+            margin-top: 60px;
+        }
+        
+        .feature-card {
+            background: linear-gradient(135deg, rgba(13, 27, 51, 0.8), rgba(26, 47, 102, 0.4));
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: var(--radius-lg);
+            padding: 40px 32px;
+            text-align: center;
+            transition: var(--transition-bounce);
+            position: relative;
+            z-index: 1;
+            overflow: hidden;
+            transform: translateY(60px);
+            opacity: 0;
+        }
+        
+        .feature-card.active {
+            transform: translateY(0);
+            opacity: 1;
+        }
+        
+        .feature-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(to right, var(--primary), var(--accent));
+            transition: var(--transition-normal);
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-10px);
+            box-shadow: var(--shadow-lg), 0 10px 40px rgba(0, 84, 255, 0.1);
+        }
+        
+        .feature-card:hover::before {
+            height: 8px;
+        }
+        
+        .feature-icon {
+            width: 80px;
+            height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 24px;
+            background: rgba(26, 35, 126, 0.1);
+            border-radius: 24px;
+            font-size: 36px;
+            color: var(--primary-light);
+            position: relative;
+            transition: var(--transition-normal);
+        }
+        
+        .feature-card:hover .feature-icon {
+            transform: scale(1.1) rotate(10deg);
+            color: var(--white);
+            background: var(--accent);
+            box-shadow: var(--glow);
+        }
+        
+        .feature-title {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 16px;
+            color: var(--white);
+        }
+        
+        .feature-description {
+            color: var(--gray-300);
+            line-height: 1.7;
+        }
+        
+        footer {
+            background: var(--dark-800);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 60px 0 40px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        footer::before {
+            content: '';
+            position: absolute;
+            top: -200px;
+            left: 0;
+            right: 0;
+            height: 200px;
+            background: linear-gradient(to top, var(--dark-800), transparent);
+            z-index: -1;
+        }
+        
+        .footer-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 40px;
+        }
+        
+        .footer-logo {
+            font-size: 24px;
+            font-weight: 800;
+            color: var(--white);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        /* Add specific styles for footer logo icon */
+        .footer-logo .logo-icon {
+            display: flex;
+            width: auto;
+            height: auto;
+            background: none;
+            box-shadow: none;
+            border-radius: 0;
+        }
+        
+        .footer-logo .logo-icon img {
+            max-height: 35px;
+            width: auto;
+            object-fit: contain;
+        }
+        
+        .footer-links {
+            display: flex;
+            gap: 32px;
+        }
+        
+        .footer-link {
+            color: var(--gray-300);
+            text-decoration: none;
+            font-weight: 500;
+            transition: var(--transition-normal);
+            position: relative;
+        }
+        
+        .footer-link::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            bottom: -4px;
+            width: 0;
+            height: 2px;
+            background: var(--accent);
+            transition: var(--transition-normal);
+        }
+        
+        .footer-link:hover {
+            color: var(--white);
+        }
+        
+        .footer-link:hover::after {
+            width: 100%;
+        }
+        
+        .copyright {
+            width: 100%;
+            text-align: center;
+            color: var(--gray-500);
+            margin-top: 40px;
+            font-size: 14px;
+        }
+        
+        @media (max-width: 1200px) {
+            .hero-title {
+                font-size: 3.2rem;
+            }
+
+            .hero-subtitle {
+                font-size: 1.35rem;
+            }
+            
+            .hero-right-section {
+                flex: 1 0 45%;
+                max-width: 45%;
+            }
+
+            .hero-content {
+                flex: 1 0 55%;
+                max-width: 55%;
+            }
+        }
+        
+        @media (max-width: 992px) {
+            .hero-title {
+                font-size: 2.9rem;
+            }
+
+            .hero-subtitle {
+                font-size: 1.3rem;
+                max-width: 95%;
+                margin-bottom: 1.8rem;
+            }
+            
+            .hero-content-wrapper {
+                flex-direction: column;
+                gap: 2rem;
+            }
+            
+            .hero-content {
+                flex: 1 0 100%;
+                max-width: 100%;
+                text-align: center;
+                align-items: center;
+                padding-right: 0;
+            }
+            
+            .hero-right-section {
+                flex: 1 0 100%;
+                max-width: 100%;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .hero {
+                padding-top: 2rem;
+                padding-bottom: 2rem;
+            }
+            
+            .hero-container {
+                margin-top: 0;
+                padding: 0 1.5rem;
+            }
+            
+            .hero-content-wrapper {
+                gap: 1.5rem;
+            }
+            
+            .hero-title {
+                font-size: 2.4rem !important;
+                line-height: 1.2;
+                margin-bottom: 1.2rem;
+            }
+            
+            .hero-subtitle {
+                font-size: 1.1rem;
+                margin-bottom: 1.5rem;
+            }
+            
+            .hero-form {
+                padding: 2rem;
+            }
+            
+            .section-title {
+                font-size: 32px;
+            }
+            
+            .features-grid {
+                grid-template-columns: 1fr;
+                max-width: 500px;
+                margin-left: auto;
+                margin-right: auto;
+            }
+            
+            .footer-content {
+                flex-direction: column;
+                text-align: center;
+                gap: 24px;
+            }
+            
+            .footer-logo {
+                justify-content: center;
+            }
+        }
+        
+        @media (max-width: 576px) {
+            header .container {
+                padding: 16px;
+            }
+            
+            .logo {
+                font-size: 20px;
+            }
+            
+            .logo-icon {
+                width: auto;
+                height: auto;
+            }
+            
+            .logo-icon img {
+                max-height: 32px;
+            }
+            
+            .header-button {
+                padding: 8px 12px;
+                font-size: 12px;
+            }
+            
+            .hero-form {
+                padding: 30px 24px;
+            }
+            
+            .hero-form h2 {
+                font-size: 24px;
+            }
+            
+            .btn {
+                padding: 14px 20px;
+                font-size: 15px;
+            }
+            
+            .footer-links {
+                flex-direction: column;
+                gap: 16px;
+            }
+        }
+        
+        .section {
+            padding: 80px 20px;
+            position: relative;
+            overflow: hidden;
+            background-color: var(--dark);
+            color: var(--light);
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: var(--light);
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(26, 35, 126, 0.15);
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(26, 35, 126, 0.25);
+            background: linear-gradient(135deg, var(--primary-light), var(--primary));
+        }
+    </style>
+</head>
+<body>
+    <header id="header">
+        <div class="container">
+            <a href="#" class="logo">
+                <div class="logo-icon">
+                    <img src="https://newsvgs.s3.us-west-2.amazonaws.com/venli.logo3.png" alt="Venli Logo">
+                </div>
+            </a>
+            
+            <a href="https://venli.app" class="header-button">
+                Main Site <i class="fas fa-arrow-right"></i>
+            </a>
+        </div>
+    </header>
+    
+    <section class="hero">
+        <div class="tech-shapes">
+            <div class="shape"></div>
+            <div class="shape"></div>
+            <div class="shape"></div>
+        </div>
+        
+        <div class="glow-spot"></div>
+        <div class="glow-spot"></div>
+        
+        <div class="hero-container">
+            <div class="hero-content-wrapper">
+                <div class="hero-content">
+                    <h1 class="hero-title">Smarter Travel <span class="shimmer-effect">Starts Here.</span></h1>
+                    <p class="hero-subtitle">Our AI travel concierge creates personalized journeys through intuitive conversation. Discover hidden gems, plan perfect itineraries, and explore the world exactly how you want.</p>
+                </div>
+                
+                <div class="hero-right-section">
+                    <div class="hero-form-container">
+                        <div class="hero-form">
+                            <h2>Start Your Journey</h2>
+                        <form id="callForm">
+                            <div class="form-group">
+                                <label for="phoneNumber">Phone Number</label>
+                                <div class="input-wrapper">
+                                    <input type="tel" id="phoneNumber" name="phoneNumber" placeholder="+1 (555) 000-0000" required>
+                                    <i class="fas fa-phone input-icon"></i>
+                                </div>
+                                <small>Include country code (e.g., +1 for US)</small>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="email">Email Address</label>
+                                <div class="input-wrapper">
+                                    <input type="email" id="email" name="email" placeholder="your.email@example.com">
+                                    <i class="fas fa-envelope input-icon"></i>
+                                </div>
+                                <small>We'll send your personalized travel recommendations here</small>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="language">Preferred Language</label>
+                                <div class="input-wrapper">
+                                    <select id="language" name="language" required>
+                                        <option value="en-US">English (US)</option>
+                                        <option value="en-GB">English (UK)</option>
+                                        <option value="es-ES">Spanish (Spain)</option>
+                                        <option value="es-MX">Spanish (Mexico)</option>
+                                        <option value="fr-FR">French (France)</option>
+                                        <option value="fr-CA">French (Canada)</option>
+                                        <option value="de-DE">German</option>
+                                        <option value="it-IT">Italian</option>
+                                        <option value="pt-BR">Portuguese (Brazil)</option>
+                                        <option value="nl-NL">Dutch</option>
+                                        <option value="da-DK">Danish</option>
+                                        <option value="sv-SE">Swedish</option>
+                                        <option value="no-NO">Norwegian</option>
+                                        <option value="fi-FI">Finnish</option>
+                                        <option value="pl-PL">Polish</option>
+                                        <option value="ru-RU">Russian</option>
+                                        <option value="ja-JP">Japanese</option>
+                                        <option value="zh-CN">Chinese (Mandarin)</option>
+                                        <option value="ko-KR">Korean</option>
+                                        <option value="ar-SA">Arabic</option>
+                                        <option value="hi-IN">Hindi</option>
+                                        <option value="tr-TR">Turkish</option>
+                                    </select>
+                                    <i class="fas fa-globe input-icon"></i>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Do you know your travel dates?</label>
+                                <div class="radio-group">
+                                    <div class="radio-option">
+                                        <input type="radio" id="datesYes" name="knowDates" value="yes">
+                                        <label for="datesYes">Yes</label>
+                                    </div>
+                                    <div class="radio-option">
+                                        <input type="radio" id="datesNo" name="knowDates" value="no" checked>
+                                        <label for="datesNo">No</label>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="travel-details" id="travelDetails">
+                                <h3>Travel Details</h3>
+                                
+                                <div class="date-row">
+                                    <div class="form-group">
+                                        <label for="departureDate">Departure Date</label>
+                                        <div class="input-wrapper">
+                                            <input type="date" id="departureDate" name="departureDate">
+                                            <i class="fas fa-calendar input-icon"></i>
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="returnDate">Return Date</label>
+                                        <div class="input-wrapper">
+                                            <input type="date" id="returnDate" name="returnDate">
+                                            <i class="fas fa-calendar input-icon"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="destination">Leaving From</label>
+                                    <div class="input-wrapper">
+                                        <input type="text" id="destination" name="destination" placeholder="e.g., New York, London, or Tokyo">
+                                        <i class="fas fa-map-marker-alt input-icon"></i>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="arrivalAirport">Going To</label>
+                                    <div class="input-wrapper">
+                                        <input type="text" id="arrivalAirport" name="arrivalAirport" placeholder="e.g., Paris, Tokyo, New York">
+                                        <i class="fas fa-map-marker-alt input-icon"></i>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <button type="submit" id="requestButton" class="btn btn-primary">
+                                Request a Call
+                                <i class="fas fa-arrow-right btn-icon"></i>
+                                <span class="loading" id="loadingSpinner"></span>
+                            </button>
+                        </form>
+                        
+                            <div class="status" id="requestStatusMessage"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <section class="features">
+        <div class="container">
+            <h2 class="section-title">How It Works</h2>
+            <p class="section-subtitle">Our AI travel concierge makes planning your next adventure effortless, intuitive and personalized to your preferences.</p>
+            
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-phone-alt"></i>
+                    </div>
+                    <h3 class="feature-title">Request a Call</h3>
+                    <p class="feature-description">Enter your phone number and preferred language, and our AI concierge will call you within moments.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-comments"></i>
+                    </div>
+                    <h3 class="feature-title">Natural Conversation</h3>
+                    <p class="feature-description">Simply chat about your travel preferences, interests, and budget - as if you're talking with a friend.</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-map-marked-alt"></i>
+                    </div>
+                    <h3 class="feature-title">Personalized Itinerary</h3>
+                    <p class="feature-description">Receive a custom travel plan with accommodations, activities, and local insights tailored just for you.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <footer>
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-logo">
+                    <div class="logo-icon">
+                        <img src="https://newsvgs.s3.us-west-2.amazonaws.com/venli.logo3.png" alt="Venli Logo">
+                    </div>
+                </div>
+                
+                <div class="footer-links">
+                    <a href="https://venli.ai" target="_blank" class="footer-link">Main Website</a>
+                    <a href="#" class="footer-link">Privacy Policy</a>
+                    <a href="#" class="footer-link">Terms of Service</a>
+                    <a href="#" class="footer-link">Contact Us</a>
+                </div>
+                
+                <div class="copyright">
+                    &copy; 2024 Venli. All rights reserved.
+                </div>
+            </div>
+        </div>
+    </footer>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Header scroll effect
+            const header = document.getElementById('header');
+            window.addEventListener('scroll', function() {
+                if (window.scrollY > 10) {
+                    header.classList.add('scrolled');
+                } else {
+                    header.classList.remove('scrolled');
+                }
+            });
+            
+            // Feature cards animation
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach((entry, index) => {
+                    if (entry.isIntersecting) {
+                        // Add delay based on card index
+                        setTimeout(() => {
+                            entry.target.classList.add('active');
+                        }, index * 150);
+                    }
+                });
+            }, { threshold: 0.1 });
+            
+            document.querySelectorAll('.feature-card').forEach((card) => {
+                observer.observe(card);
+            });
+            
+            // Travel dates toggle
+            const datesYes = document.getElementById('datesYes');
+            const datesNo = document.getElementById('datesNo');
+            const travelDetails = document.getElementById('travelDetails');
+            
+            datesYes.addEventListener('change', function() {
+                if (this.checked) {
+                    travelDetails.classList.add('show');
+                }
+            });
+            
+            datesNo.addEventListener('change', function() {
+                if (this.checked) {
+                    travelDetails.classList.remove('show');
+                }
+            });
+            
+            // Form handling
+            const callForm = document.getElementById('callForm');
+            const requestButton = document.getElementById('requestButton');
+            const loadingSpinner = document.getElementById('loadingSpinner');
+            const requestStatusMessage = document.getElementById('requestStatusMessage');
+            
+            callForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                // Show loading state
+                requestButton.disabled = true;
+                loadingSpinner.style.display = 'inline-block';
+                requestStatusMessage.style.display = 'none';
+                
+                // Get form data
+                const phoneNumber = document.getElementById('phoneNumber').value.trim();
+                const email = document.getElementById('email').value.trim();
+                const language = document.getElementById('language').value;
+                const knowDates = document.querySelector('input[name="knowDates"]:checked').value;
+                
+                // Prepare request data
+                const requestData = {
+                    phoneNumber: phoneNumber,
+                    language: language,
+                    metadata: {
+                        email: email || null,
+                        knowDates: knowDates || 'no',
+                        travelDetails: null,
+                        source: 'netlify-frontend',
+                        timestamp: new Date().toISOString()
+                    }
+                };
+                
+                // Add travel details if dates are known
+                if (knowDates === 'yes') {
+                    requestData.metadata.travelDetails = {
+                        departureDate: document.getElementById('departureDate').value,
+                        returnDate: document.getElementById('returnDate').value,
+                        destination: document.getElementById('destination').value,
+                        arrivalAirport: document.getElementById('arrivalAirport').value
+                    };
+                }
+                
+                console.log('Submitting request with data:', requestData);
+                
+                // Set timeout for request
+                const timeoutId = setTimeout(() => {
+                    clearTimeout(fallbackTimeout); // Make sure fallback is cleared
+                    loadingSpinner.style.display = 'none'; // Explicitly hide spinner
+                    requestButton.disabled = false; // Enable button
+                    showStatus('error', 'Request timed out. Our server might be busy. Please try again later.');
+                }, 10000); // 10 second timeout
+                
+                // Fallback in case the fetch API fails silently
+                const fallbackTimeout = setTimeout(() => {
+                    // Only show this if the button is still disabled (meaning the request never completed)
+                    if (requestButton.disabled) {
+                        clearTimeout(timeoutId); // Make sure main timeout is cleared
+                        loadingSpinner.style.display = 'none'; // Explicitly hide spinner
+                        requestButton.disabled = false; // Enable button
+                        showStatus('success', 'Request sent! If you don\'t receive a call within a minute, please try again.');
+                    }
+                }, 15000); // 15 second fallback
+                
+                // Make the API call to the backend
+                fetch('https://phone-agent-4v5a.onrender.com/make-call', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestData)
+                })
+                .then(response => {
+                    clearTimeout(timeoutId);
+                    clearTimeout(fallbackTimeout);
+                    if (!response.ok) {
+                        return response.text().then(text => {
+                            throw new Error(`Server responded with status: ${response.status}. Message: ${text}`);
+                        });
+                    }
+                    
+                    return response.json().catch(err => {
+                        throw new Error('Invalid response from server');
+                    });
+                })
+                .then(result => {
+                    loadingSpinner.style.display = 'none'; // Explicitly hide spinner
+                    requestButton.disabled = false; // Enable button
+                    if (result.success) {
+                        showStatus('success', 'Call request received! Our AI concierge will call you momentarily.');
+                    } else {
+                        showStatus('error', result.message || 'Something went wrong. Please try again.');
+                    }
+                })
+                .catch(error => {
+                    clearTimeout(timeoutId);
+                    clearTimeout(fallbackTimeout);
+                    console.error('Request failed:', error.message);
+                    
+                    loadingSpinner.style.display = 'none'; // Explicitly hide spinner
+                    requestButton.disabled = false; // Enable button
+                    
+                    let userMessage = `An error occurred. Please try again later.`;
+                    if (error.message.includes('Failed to fetch')) {
+                        userMessage = 'Connection error. Please check your internet and try again.';
+                    } else if (error.message.includes('status: 400')) {
+                        userMessage = 'Please check your phone number format and try again.';
+                    }
+                    
+                    showStatus('error', userMessage);
+                });
+            });
+            
+            function showStatus(type, message) {
+                requestButton.disabled = false;
+                loadingSpinner.style.display = 'none';
+                
+                requestStatusMessage.textContent = message;
+                requestStatusMessage.className = 'status ' + type;
+                requestStatusMessage.style.display = 'block';
+                
+                // For tracking purposes
+                console.log(`Status displayed: ${type} - ${message}`);
+            }
+            
+            // Add 3D tilt effect to the form
+            const heroForm = document.querySelector('.hero-form');
+            
+            heroForm.addEventListener('mousemove', (e) => {
+                const rect = heroForm.getBoundingClientRect();
+                const x = (e.clientX - rect.left) / rect.width;
+                const y = (e.clientY - rect.top) / rect.height;
+                
+                const tiltX = (y - 0.5) * 10; // 10 degree tilt
+                const tiltY = (0.5 - x) * 10;
+                
+                heroForm.style.transform = `perspective(1000px) rotateX(${tiltX}deg) rotateY(${tiltY}deg) translateY(-5px)`;
+            });
+            
+            heroForm.addEventListener('mouseleave', () => {
+                heroForm.style.transform = 'perspective(1000px) rotateX(0) rotateY(0) translateY(-5px)';
+            });
+        });
+    </script>
+</body>
+</html> 
