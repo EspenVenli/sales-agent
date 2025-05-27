@@ -223,9 +223,9 @@ fastify.register(async (fastify) => {
                 session: {
                     turn_detection: { 
                         type: 'server_vad',
-                        threshold: 0.6,
-                        prefix_padding_ms: 200,
-                        silence_duration_ms: 500
+                        threshold: 0.2,
+                        prefix_padding_ms: 50,
+                        silence_duration_ms: 200
                     },
                     input_audio_format: 'g711_ulaw',
                     output_audio_format: 'g711_ulaw',
@@ -279,6 +279,15 @@ fastify.register(async (fastify) => {
                      case 'media':
                          if (!callSid || !callActive) { return; }
                          if (openAiWs && openAiWs.readyState === WebSocket.OPEN) { 
+                            // Immediately cancel any ongoing AI response when user audio is detected
+                            try {
+                                openAiWs.send(JSON.stringify({
+                                    type: 'response.cancel'
+                                }));
+                            } catch (e) {
+                                // Ignore errors for response.cancel
+                            }
+                            
                             const audioAppend = { type: 'input_audio_buffer.append', audio: data.media.payload };
                             openAiWs.send(JSON.stringify(audioAppend));
                          }
@@ -448,12 +457,24 @@ fastify.register(async (fastify) => {
                                 break;
 
                             case 'input_audio_buffer.speech_started':
-                                console.log(`[${connectionId}][${callSid}] User started speaking - cancelling any ongoing AI response`);
-                                // Cancel any ongoing AI response to allow interruption
-                                openAiWs.send(JSON.stringify({
-                                    type: 'response.cancel'
-                                }));
-                                console.log(`[${connectionId}][${callSid}] Sent response.cancel to allow user interruption`);
+                                console.log(`[${connectionId}][${callSid}] 🚨 USER STARTED SPEAKING - IMMEDIATE INTERRUPTION`);
+                                // Cancel any ongoing AI response to allow interruption - send multiple times to ensure it works
+                                try {
+                                    openAiWs.send(JSON.stringify({
+                                        type: 'response.cancel'
+                                    }));
+                                    // Send again to be absolutely sure
+                                    setTimeout(() => {
+                                        if (openAiWs && openAiWs.readyState === WebSocket.OPEN) {
+                                            openAiWs.send(JSON.stringify({
+                                                type: 'response.cancel'
+                                            }));
+                                        }
+                                    }, 10);
+                                } catch (e) {
+                                    console.error(`[${connectionId}][${callSid}] Error sending response.cancel:`, e.message);
+                                }
+                                console.log(`[${connectionId}][${callSid}] ✅ SENT AGGRESSIVE RESPONSE.CANCEL FOR INTERRUPTION`);
                                 break;
 
                             case 'input_audio_buffer.speech_stopped':
