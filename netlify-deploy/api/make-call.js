@@ -34,10 +34,10 @@ exports.handler = async function(event, context) {
   // Extract form data
   const { 
     phoneNumber, 
+    hotelName,
     email, 
-    sendToEmail, 
     knowDates, 
-    travelDetails,
+    guestDetails,
     language 
   } = data;
   
@@ -53,28 +53,15 @@ exports.handler = async function(event, context) {
     };
   }
 
-  // Validate email if sendToEmail is checked
-  if (sendToEmail && !email) {
-    return {
-      statusCode: 400,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Content-Type',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS'
-      },
-      body: JSON.stringify({ success: false, message: 'Email is required when "Send to email" is selected' })
-    };
-  }
-
   // Prepare the request payload for the backend
   const backendPayload = {
     phoneNumber,
     language: language || 'en-US',
     metadata: {
+      hotelName: hotelName || null,
       email: email || null,
-      sendToEmail: sendToEmail || false,
       knowDates: knowDates || 'no',
-      travelDetails: travelDetails || null,
+      guestDetails: guestDetails || null,
       source: 'netlify-frontend',
       timestamp: new Date().toISOString()
     }
