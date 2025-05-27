@@ -29,7 +29,7 @@ const {
 
 // Constants
 const DOMAIN = rawDomain.replace(/(^\w+:|^)\/\//, '').replace(/\/+$/, ''); // Clean protocols and slashes
-const SYSTEM_MESSAGE = "You are Felix, a travel concierge whose main goal is to discover the details of the user's perfect trip—including their travel preferences, interests, companions, and desired experiences—without making the conversation feel like an interview, Occasionally use mild filler words—like \"um\" or \"uh\"—so you sound naturally conversational. You will recieve information about the user via initial internal message that you DO NOT reply to. Warm Greeting & Intro - Briefly introduce yourself and be genuine in helping them find amazing destinations and create a personalized experiences. Ask if they've ever spoken to an AI on the phone before. Uncover Travel Plans & Preferences Confirm details you've been given in internal message. If no travel plans given, find out if they have a specific trip planned or if they need destination ideas. If they don't have a plan yet, offer a few suggestions until you land on a destination of interest. Invite them to do a \"braindump\" of what they enjoy—sightseeing, cuisine, adventure, relaxation, etc., as you will send a bespoke itinerary. Weave in questions naturally, keeping a warm, casual tone—avoid rapid-fire queries. Mention that you're compiling a list of recommendations for them. Add Local Knowledge & Anecdotes Occasionally share brief, engaging local tidbits or fun anecdotes about the destination. Keep it concise but informative—just enough to spark their interest. Acknowledge & Build on Answers Respond to the user's answers with enthusiasm and follow-up questions. Maintain a friendly, natural flow. Ask About Lodging After learning about who they're traveling with, how long they'll be there, and what they want to see/do/eat, inquire if they've decided on accommodations yet. Summarize & Offer Itinerary Link Summarize the key preferences and trip details in a quick, upbeat recap. Let the user know you'll text them a link to Venli with their personalized itinerary. Keep your tone positive and engaging, as though chatting with a friend, while systematically collecting the information needed to tailor their travel plans. Ask layered, open-ended questions that invite the user to elaborate.";
+const SYSTEM_MESSAGE = "You are Felix, a warm, natural hotel concierge whose goal is to make each guest stay unforgettable. You will receive an internal only message with the guest reservation details that you DO NOT speak aloud. When you reply: 1. GREET - Open with 'Hello! I am Felix, your concierge here at [Hotel Name].' Use mild fillers (um, uh) so you feel like a friendly human. Ask how their journey was. 2. CONFIRM - Casually confirm their dates and room type. Invite them to share any must-haves: dining preferences, spa treatments, local transport, celebrations, dietary restrictions, etc. 3. OFFER - Based on their wishes, suggest up to three tailored options in each category. For each suggestion, include a brief friendly note and any practical detail. 4. COMPILE - Let them know you will email over a full set of tailored recommendations. 5. CLOSE - Remind them you are available 24/7. Keep your tone upbeat, conversational, and helpful.";
 const VOICE = 'ballad'; // Options include: alloy, ash, ballad, coral, echo, sage, shimmer, and verse
 const PORT = process.env.PORT || 6060; // Allow dynamic port assignment
 const INITIAL_USER_MESSAGE = "Hello?"; // Define the initial message
@@ -376,30 +376,39 @@ fastify.register(async (fastify) => {
                                 console.log(`[${connectionId}][${callSid}] Session updated. Kicking off conversation in ${userLanguage}.`);
                                 broadcastStatus(callSid, 'Session updated');
                                 
-                                // Build context message with language and travel info
+                                // Build context message with language and hotel info
                                 let contextMessage = `INTERNAL ONLY: Please speak to the user in ${userLanguage}.`;
                                 
-                                // Add travel information if available
+                                // Add hotel and guest information if available
                                 const metadata = callMetadata.get(callSid);
-                                if (metadata && metadata.knowDates === 'yes' && metadata.travelDetails) {
-                                    const details = metadata.travelDetails;
-                                    let travelInfo = [];
+                                if (metadata) {
+                                    let hotelInfo = [];
                                     
-                                    if (details.departureDate && details.returnDate) {
-                                        travelInfo.push(`User travel dates are ${details.departureDate} to ${details.returnDate}`);
-                                    } else if (details.departureDate) {
-                                        travelInfo.push(`User departure date is ${details.departureDate}`);
+                                    // Add hotel name if provided
+                                    if (metadata.hotelName) {
+                                        hotelInfo.push(`This guest is staying at ${metadata.hotelName}`);
                                     }
                                     
-                                    if (details.destination) {
-                                      travelInfo.push(`They are leaving from ${details.destination}`);
-                                  }
-                                    if (details.arrivalAirport) {
-                                        travelInfo.push(`and are going to ${details.arrivalAirport}`);
+                                    // Add guest details if available
+                                    if (metadata.knowDates === 'yes' && metadata.guestDetails) {
+                                        const details = metadata.guestDetails;
+                                        
+                                        if (details.checkInDate && details.checkOutDate) {
+                                            hotelInfo.push(`Guest check-in is ${details.checkInDate} and check-out is ${details.checkOutDate}`);
+                                        } else if (details.checkInDate) {
+                                            hotelInfo.push(`Guest check-in date is ${details.checkInDate}`);
+                                        }
+                                        
+                                        if (details.notes) {
+                                            hotelInfo.push(`Guest notes: ${details.notes}`);
+                                        }
+                                        if (details.specialRequests) {
+                                            hotelInfo.push(`Special requests: ${details.specialRequests}`);
+                                        }
                                     }
-                                  
-                                    if (travelInfo.length > 0) {
-                                        contextMessage += ` ${travelInfo.join(' ')}.`;
+                                    
+                                    if (hotelInfo.length > 0) {
+                                        contextMessage += ` ${hotelInfo.join('. ')}.`;
                                     }
                                 }
                                 

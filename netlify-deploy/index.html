@@ -135,7 +135,6 @@
             position: fixed;
             width: 100%;
             z-index: 1000;
-            padding: 0.5rem 0;
             border-bottom: 1px solid var(--glass-border);
             transition: var(--transition-smooth);
         }
@@ -150,6 +149,7 @@
             justify-content: space-between;
             align-items: center;
             padding: 1rem 2rem;
+            height: 70px; /* Fixed height for header */
         }
         
         .header-button {
@@ -421,7 +421,7 @@
         .hero-form-container {
             position: relative;
             width: 100%;
-            max-width: 650px;
+            max-width: 800px;
             margin: 0 auto;
             padding: 0 1rem;
         }
@@ -707,6 +707,32 @@
                 flex-direction: column;
                 gap: 12px;
             }
+            
+            .hero-right-section {
+                margin-top: 1rem;
+            }
+            
+            .hero-form-container {
+                max-width: 100%;
+                padding: 0 0.5rem;
+            }
+            
+            .hero-form {
+                padding: 1.5rem;
+                width: 100%;
+            }
+        }
+        
+        /* Specific adjustments for larger mobile devices */
+        @media (min-width: 428px) and (max-width: 768px) {
+            .hero-form-container {
+                max-width: 420px;
+                margin: 0 auto;
+            }
+            
+            .hero-form {
+                padding: 2rem;
+            }
         }
         
         .status {
@@ -957,6 +983,10 @@
                 flex: 1 0 55%;
                 max-width: 55%;
             }
+            
+            .hero-form-container {
+                max-width: 700px;
+            }
         }
         
         @media (max-width: 992px) {
@@ -987,11 +1017,15 @@
                 flex: 1 0 100%;
                 max-width: 100%;
             }
+            
+            .hero-form-container {
+                max-width: 600px;
+            }
         }
         
         @media (max-width: 768px) {
             .hero {
-                padding-top: 2rem;
+                padding-top: 5rem;
                 padding-bottom: 2rem;
             }
             
@@ -1001,7 +1035,12 @@
             }
             
             .hero-content-wrapper {
+                margin-top: 1rem;
                 gap: 1.5rem;
+            }
+            
+            .hero-content {
+                padding-top: 1rem;
             }
             
             .hero-title {
@@ -1013,10 +1052,11 @@
             .hero-subtitle {
                 font-size: 1.1rem;
                 margin-bottom: 1.5rem;
+                padding: 0 1rem;
             }
             
             .hero-form {
-                padding: 2rem;
+                padding: 1.5rem;
             }
             
             .section-title {
@@ -1039,33 +1079,58 @@
             .footer-logo {
                 justify-content: center;
             }
-        }
-        
-        @media (max-width: 576px) {
+            
             header .container {
-                padding: 16px;
+                height: 60px; /* Slightly smaller fixed height for mobile */
+                padding: 0 1rem;
             }
             
             .logo {
-                font-size: 20px;
-            }
-            
-            .logo-icon {
-                width: auto;
-                height: auto;
+                height: 40px;
+                display: flex;
+                align-items: center;
             }
             
             .logo-icon img {
                 max-height: 32px;
+                width: auto;
             }
             
             .header-button {
-                padding: 8px 12px;
-                font-size: 12px;
+                height: 36px;
+                display: flex;
+                align-items: center;
+                padding: 0 1rem;
+                font-size: 14px;
+            }
+            
+            .hero-form-container {
+                max-width: 100%;
             }
             
             .hero-form {
-                padding: 30px 24px;
+                padding: 1.5rem;
+            }
+        }
+        
+        @media (max-width: 576px) {
+            header .container {
+                height: 50px; /* Even smaller for very small screens */
+                padding: 0 0.75rem;
+            }
+            
+            .logo-icon img {
+                max-height: 28px;
+            }
+            
+            .header-button {
+                height: 32px;
+                padding: 0 0.75rem;
+                font-size: 13px;
+            }
+            
+            .hero-form {
+                padding: 1.25rem;
             }
             
             .hero-form h2 {
@@ -1080,6 +1145,19 @@
             .footer-links {
                 flex-direction: column;
                 gap: 16px;
+            }
+            
+            .hero {
+                padding-top: 4rem;
+                padding-bottom: 1.5rem;
+            }
+            
+            .hero-content-wrapper {
+                margin-top: 0.75rem;
+            }
+            
+            .hero-content {
+                padding-top: 0.75rem;
             }
         }
         
@@ -1138,31 +1216,38 @@
         <div class="hero-container">
             <div class="hero-content-wrapper">
                 <div class="hero-content">
-                    <h1 class="hero-title">Smarter Travel <span class="shimmer-effect">Starts Here.</span></h1>
-                    <p class="hero-subtitle">Our AI travel concierge creates personalized journeys through intuitive conversation. Discover hidden gems, plan perfect itineraries, and explore the world exactly how you want.</p>
+                    <h1 class="hero-title">Smarter Guest Service <span class="shimmer-effect">Starts Here.</span></h1>
+                    <p class="hero-subtitle">Our AI hotel concierge assists your guests with bookings, amenities, local recommendations, and instant support—delivering a seamless guest experience 24/7.</p>
                 </div>
                 
                 <div class="hero-right-section">
                     <div class="hero-form-container">
                         <div class="hero-form">
-                            <h2>Start Your Journey</h2>
+                            <h2>Request Concierge Assistance</h2>
                         <form id="callForm">
                             <div class="form-group">
-                                <label for="phoneNumber">Phone Number</label>
+                                <label for="hotelName">Hotel Name</label>
+                                <div class="input-wrapper">
+                                    <input type="text" id="hotelName" name="hotelName" placeholder="e.g., Grand Hotel, Seaside Resort" required>
+                                    <i class="fas fa-hotel input-icon"></i>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="phoneNumber">Guest Phone Number</label>
                                 <div class="input-wrapper">
                                     <input type="tel" id="phoneNumber" name="phoneNumber" placeholder="+1 (555) 000-0000" required>
                                     <i class="fas fa-phone input-icon"></i>
                                 </div>
-                                <small>Include country code (e.g., +1 for US)</small>
+                                <small>We'll contact this number to assist your guest</small>
                             </div>
                             
                             <div class="form-group">
-                                <label for="email">Email Address</label>
+                                <label for="email">Guest Email Address</label>
                                 <div class="input-wrapper">
                                     <input type="email" id="email" name="email" placeholder="your.email@example.com">
                                     <i class="fas fa-envelope input-icon"></i>
                                 </div>
-                                <small>We'll send your personalized travel recommendations here</small>
+                                <small>We'll send guest service details and confirmations here</small>
                             </div>
                             
                             <div class="form-group">
@@ -1197,7 +1282,7 @@
                             </div>
                             
                             <div class="form-group">
-                                <label>Do you know your travel dates?</label>
+                                <label>Do you know the guest's check-in and check-out dates?</label>
                                 <div class="radio-group">
                                     <div class="radio-option">
                                         <input type="radio" id="datesYes" name="knowDates" value="yes">
@@ -1211,18 +1296,18 @@
                             </div>
                             
                             <div class="travel-details" id="travelDetails">
-                                <h3>Travel Details</h3>
+                                <h3>Guest Stay Details</h3>
                                 
                                 <div class="date-row">
                                     <div class="form-group">
-                                        <label for="departureDate">Departure Date</label>
+                                        <label for="departureDate">Check-in Date</label>
                                         <div class="input-wrapper">
                                             <input type="date" id="departureDate" name="departureDate">
                                             <i class="fas fa-calendar input-icon"></i>
                                         </div>
                                     </div>
                                     <div class="form-group">
-                                        <label for="returnDate">Return Date</label>
+                                        <label for="returnDate">Check-out Date</label>
                                         <div class="input-wrapper">
                                             <input type="date" id="returnDate" name="returnDate">
                                             <i class="fas fa-calendar input-icon"></i>
@@ -1231,24 +1316,24 @@
                                 </div>
                                 
                                 <div class="form-group">
-                                    <label for="destination">Leaving From</label>
+                                    <label for="destination">Notes</label>
                                     <div class="input-wrapper">
-                                        <input type="text" id="destination" name="destination" placeholder="e.g., New York, London, or Tokyo">
-                                        <i class="fas fa-map-marker-alt input-icon"></i>
+                                        <input type="text" id="destination" name="destination" placeholder="e.g., Room preferences, special requests, or any additional notes">
+                                        <i class="fas fa-sticky-note input-icon"></i>
                                     </div>
                                 </div>
                                 
                                 <div class="form-group">
-                                    <label for="arrivalAirport">Going To</label>
+                                    <label for="arrivalAirport">Special Requests or Amenities</label>
                                     <div class="input-wrapper">
-                                        <input type="text" id="arrivalAirport" name="arrivalAirport" placeholder="e.g., Paris, Tokyo, New York">
-                                        <i class="fas fa-map-marker-alt input-icon"></i>
+                                        <input type="text" id="arrivalAirport" name="arrivalAirport" placeholder="e.g., Late check-in, airport pickup, spa booking">
+                                        <i class="fas fa-concierge-bell input-icon"></i>
                                     </div>
                                 </div>
                             </div>
                             
                             <button type="submit" id="requestButton" class="btn btn-primary">
-                                Request a Call
+                                Request Concierge
                                 <i class="fas fa-arrow-right btn-icon"></i>
                                 <span class="loading" id="loadingSpinner"></span>
                             </button>
@@ -1265,15 +1350,15 @@
     <section class="features">
         <div class="container">
             <h2 class="section-title">How It Works</h2>
-            <p class="section-subtitle">Our AI travel concierge makes planning your next adventure effortless, intuitive and personalized to your preferences.</p>
+            <p class="section-subtitle">Our AI hotel concierge makes guest service effortless, intuitive, and personalized to every guest's needs.</p>
             
             <div class="features-grid">
                 <div class="feature-card">
                     <div class="feature-icon">
                         <i class="fas fa-phone-alt"></i>
                     </div>
-                    <h3 class="feature-title">Request a Call</h3>
-                    <p class="feature-description">Enter your phone number and preferred language, and our AI concierge will call you within moments.</p>
+                    <h3 class="feature-title">Request Concierge</h3>
+                    <p class="feature-description">Enter the guest's phone number and preferred language, and our AI concierge will reach out to assist with any request.</p>
                 </div>
                 
                 <div class="feature-card">
@@ -1281,15 +1366,15 @@
                         <i class="fas fa-comments"></i>
                     </div>
                     <h3 class="feature-title">Natural Conversation</h3>
-                    <p class="feature-description">Simply chat about your travel preferences, interests, and budget - as if you're talking with a friend.</p>
+                    <p class="feature-description">Guests can chat about amenities, local recommendations, bookings, or any question—just like talking to a real concierge.</p>
                 </div>
                 
                 <div class="feature-card">
                     <div class="feature-icon">
-                        <i class="fas fa-map-marked-alt"></i>
+                        <i class="fas fa-hotel"></i>
                     </div>
-                    <h3 class="feature-title">Personalized Itinerary</h3>
-                    <p class="feature-description">Receive a custom travel plan with accommodations, activities, and local insights tailored just for you.</p>
+                    <h3 class="feature-title">Personalized Guest Experience</h3>
+                    <p class="feature-description">Receive a summary of guest requests, preferences, and confirmations—ensuring every stay is memorable and seamless.</p>
                 </div>
             </div>
         </div>
@@ -1379,6 +1464,7 @@
                 
                 // Get form data
                 const phoneNumber = document.getElementById('phoneNumber').value.trim();
+                const hotelName = document.getElementById('hotelName').value.trim();
                 const email = document.getElementById('email').value.trim();
                 const language = document.getElementById('language').value;
                 const knowDates = document.querySelector('input[name="knowDates"]:checked').value;
@@ -1388,21 +1474,22 @@
                     phoneNumber: phoneNumber,
                     language: language,
                     metadata: {
+                        hotelName: hotelName || null,
                         email: email || null,
                         knowDates: knowDates || 'no',
-                        travelDetails: null,
+                        guestDetails: null,
                         source: 'netlify-frontend',
                         timestamp: new Date().toISOString()
                     }
                 };
                 
-                // Add travel details if dates are known
+                // Add guest details if dates are known
                 if (knowDates === 'yes') {
-                    requestData.metadata.travelDetails = {
-                        departureDate: document.getElementById('departureDate').value,
-                        returnDate: document.getElementById('returnDate').value,
-                        destination: document.getElementById('destination').value,
-                        arrivalAirport: document.getElementById('arrivalAirport').value
+                    requestData.metadata.guestDetails = {
+                        checkInDate: document.getElementById('departureDate').value,
+                        checkOutDate: document.getElementById('returnDate').value,
+                        notes: document.getElementById('destination').value,
+                        specialRequests: document.getElementById('arrivalAirport').value
                     };
                 }
                 
