@@ -84,7 +84,7 @@ exports.handler = async function(event, context) {
   try {
     console.log('Forwarding request to backend:', JSON.stringify(backendPayload, null, 2));
     
-    const response = await fetch('https://phone-agent-4v5a.onrender.com/make-call', {
+    const response = await fetch('https://hotelagent.onrender.com/make-call', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
