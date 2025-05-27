@@ -206,9 +206,8 @@ fastify.register(async (fastify) => {
         let streamSid = null;
         let callActive = false;
         let userLanguage = 'en-US'; // Variable to store the language for this call
-        let aiCurrentlySpeaking = false; // Track if AI is currently generating/speaking
-        let lastUserSpeechTime = 0; // Track when user last spoke
-        let speechStartTime = 0; // Track when current speech started
+        let aiSpeaking = false; // Track if AI is currently speaking
+        let userSpeaking = false; // Track if user is currently speaking
 
         // Define sendInitialSessionUpdate first
         const sendInitialSessionUpdate = () => {
@@ -226,9 +225,9 @@ fastify.register(async (fastify) => {
                 session: {
                     turn_detection: { 
                         type: 'server_vad',
-                        threshold: 0.7,
-                        prefix_padding_ms: 100,
-                        silence_duration_ms: 800
+                        threshold: 0.3,
+                        prefix_padding_ms: 200,
+                        silence_duration_ms: 400
                     },
                     input_audio_format: 'g711_ulaw',
                     output_audio_format: 'g711_ulaw',
@@ -344,6 +343,7 @@ fastify.register(async (fastify) => {
 
                 openAiWs.on('open', () => {
                     console.log(`[${connectionId}][${callSid}] OpenAI WebSocket connected successfully.`);
+                    console.log(`[${connectionId}][${callSid}] 🎯 INTERRUPTION SYSTEM: VAD configured with threshold=0.3, padding=200ms, silence=400ms`);
                     // Now that it's open AND we know callSid exists (because setupOpenAI is called after start event),
                     // send the session update.
                      if (callSid && callActive) {
@@ -440,7 +440,6 @@ fastify.register(async (fastify) => {
                                 openAiWs.send(JSON.stringify(initialConversationItem));
 
                                 console.log(`[${connectionId}][${callSid}] Requesting initial response from OpenAI.`);
-                                aiCurrentlySpeaking = true; // AI is about to start speaking
                                 openAiWs.send(JSON.stringify({ 
                                     type: 'response.create',
                                     response: {
@@ -452,31 +451,37 @@ fastify.register(async (fastify) => {
                                 break;
 
                             case 'input_audio_buffer.speech_started':
-                                const currentTime = Date.now();
-                                speechStartTime = currentTime;
+                                console.log(`[${connectionId}][${callSid}] 🎤 USER STARTED SPEAKING - INTERRUPTING AI RESPONSE`);
+                                userSpeaking = true;
+                                aiSpeaking = false; // AI should stop speaking immediately
                                 
-                                console.log(`[${connectionId}][${callSid}] User started speaking`);
-                                console.log(`[${connectionId}][${callSid}] AI currently speaking: ${aiCurrentlySpeaking}`);
-                                console.log(`[${connectionId}][${callSid}] Time since last user speech: ${currentTime - lastUserSpeechTime}ms`);
+                                // Immediately cancel any ongoing AI response
+                                openAiWs.send(JSON.stringify({
+                                    type: 'response.cancel'
+                                }));
                                 
-                                // Only cancel AI response if:
-                                // 1. AI is currently speaking/generating
-                                // 2. It's been at least 500ms since the last user speech (avoid rapid fire interruptions)
-                                if (aiCurrentlySpeaking && (currentTime - lastUserSpeechTime > 500)) {
-                                    console.log(`[${connectionId}][${callSid}] Valid interruption detected - cancelling AI response`);
-                                    openAiWs.send(JSON.stringify({
-                                        type: 'response.cancel'
-                                    }));
-                                    aiCurrentlySpeaking = false;
-                                } else {
-                                    console.log(`[${connectionId}][${callSid}] Speech detected but not interrupting (AI not speaking or too soon after last speech)`);
+                                // Clear the input audio buffer to ensure clean interruption
+                                openAiWs.send(JSON.stringify({
+                                    type: 'input_audio_buffer.clear'
+                                }));
+                                
+                                // Stop any ongoing audio playback on Twilio side
+                                if (socket && socket.readyState === WebSocket.OPEN) {
+                                    const clearMessage = {
+                                        event: 'clear',
+                                        streamSid: streamSid
+                                    };
+                                    socket.send(JSON.stringify(clearMessage));
                                 }
+                                
+                                console.log(`[${connectionId}][${callSid}] ✅ Sent response.cancel, buffer.clear, and Twilio clear for interruption`);
+                                broadcastStatus(callSid, 'User interrupted - AI response cancelled');
                                 break;
 
                             case 'input_audio_buffer.speech_stopped':
-                                lastUserSpeechTime = Date.now();
-                                const speechDuration = lastUserSpeechTime - speechStartTime;
-                                console.log(`[${connectionId}][${callSid}] User stopped speaking after ${speechDuration}ms`);
+                                console.log(`[${connectionId}][${callSid}] 🎤 USER STOPPED SPEAKING - ready for AI response`);
+                                userSpeaking = false;
+                                broadcastStatus(callSid, 'User finished speaking');
                                 break;
 
                             case 'conversation.item.created':
@@ -510,7 +515,6 @@ fastify.register(async (fastify) => {
                             case 'input_audio_buffer.committed':
                                 console.log(`[${connectionId}][${callSid}] Audio buffer committed - user finished speaking`);
                                 // User finished speaking → ask for AI response with both text and audio
-                                aiCurrentlySpeaking = true; // AI is about to start speaking
                                 openAiWs.send(JSON.stringify({
                                     type: 'response.create',
                                     response: {
@@ -518,7 +522,7 @@ fastify.register(async (fastify) => {
                                         instructions: 'Always provide both text and audio responses. Include the text version of everything you say.'
                                     }
                                 }));
-                                console.log(`[${connectionId}][${callSid}] Requested new response with text and audio - AI now speaking`);
+                                console.log(`[${connectionId}][${callSid}] Requested new response with text and audio`);
                                 break;
 
                             case 'conversation.item.input_audio_transcription.completed':
@@ -536,7 +540,9 @@ fastify.register(async (fastify) => {
 
                             case 'response.audio.delta':
                                 // ** Handle incoming audio from OpenAI and forward to Twilio **
-                                if (response.delta) {
+                                // Only send audio if user is not currently speaking (to prevent talking over user)
+                                if (response.delta && !userSpeaking) {
+                                    aiSpeaking = true;
                                     // Ensure the Twilio socket is open before sending
                                     if (socket && socket.readyState === WebSocket.OPEN) {
                                         const mediaMessage = {
@@ -551,6 +557,8 @@ fastify.register(async (fastify) => {
                                     } else {
                                         console.warn(`[${connectionId}][${callSid}] Twilio socket not open, cannot forward audio.`);
                                     }
+                                } else if (userSpeaking) {
+                                    console.log(`[${connectionId}][${callSid}] 🚫 Dropping AI audio delta - user is speaking`);
                                 }
                                 break;
                                 
@@ -592,8 +600,7 @@ fastify.register(async (fastify) => {
 
                             case 'response.done':
                                 console.log(`[${connectionId}][${callSid}] Response done:`, JSON.stringify(response, null, 2));
-                                aiCurrentlySpeaking = false; // AI finished speaking
-                                console.log(`[${connectionId}][${callSid}] AI finished speaking`);
+                                aiSpeaking = false; // AI finished speaking
                                 
                                 // Pull the final transcript from response.done
                                 const items = response.response?.output || [];
@@ -617,12 +624,14 @@ fastify.register(async (fastify) => {
                                         console.log(`[${connectionId}][${callSid}] Created new assistant message with final transcript`);
                                     }
                                 }
+                                broadcastStatus(callSid, 'AI finished speaking');
                                 break;
 
                             case 'response.cancelled':
                                 console.log(`[${connectionId}][${callSid}] Response cancelled:`, JSON.stringify(response, null, 2));
-                                aiCurrentlySpeaking = false; // AI stopped speaking due to interruption
-                                console.log(`[${connectionId}][${callSid}] ✅ AI RESPONSE CANCELLED - user successfully interrupted`);
+                                aiSpeaking = false; // AI was interrupted/cancelled
+                                console.log(`[${connectionId}][${callSid}] ✅ AI RESPONSE CANCELLED - user can interrupt`);
+                                broadcastStatus(callSid, 'AI response cancelled due to interruption');
                                 break;
 
                             default:

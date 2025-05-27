@@ -441,18 +441,18 @@
             100% {
                 transform: translateY(-100px) translateX(100px) rotate(360deg);
                 opacity: 0;
-            }
+        }
         }
         
         @keyframes backgroundPulse {
             0% { 
                 opacity: 0.3; 
                 transform: scale(1) rotate(0deg);
-            }
+        }
             100% { 
                 opacity: 0.6; 
                 transform: scale(1.05) rotate(2deg);
-            }
+        }
         }
         
         @keyframes backgroundShift {
@@ -544,12 +544,12 @@
             font-weight: 500;
             color: var(--gray-200);
             font-size: 0.875rem;
-        }
-        
+            }
+            
         .form-input {
             position: relative;
-        }
-        
+            }
+            
         .form-input input,
         .form-input select {
             width: 100%;
@@ -560,8 +560,8 @@
             color: white;
             font-size: 1rem;
             transition: var(--transition);
-        }
-        
+            }
+            
         .form-input input:focus,
         .form-input select:focus {
             outline: none;
@@ -782,8 +782,8 @@
             border-radius: 50%;
             border-top-color: white;
             animation: spin 1s linear infinite;
-        }
-        
+            }
+
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
@@ -796,20 +796,20 @@
             display: none;
             text-align: center;
             font-weight: 500;
-        }
-        
+            }
+
         .status.success {
             background: rgba(34, 197, 94, 0.1);
             color: #22c55e;
             border: 1px solid rgba(34, 197, 94, 0.2);
-        }
-        
+            }
+            
         .status.error {
             background: rgba(239, 68, 68, 0.1);
             color: #ef4444;
             border: 1px solid rgba(239, 68, 68, 0.2);
-        }
-        
+            }
+            
         /* Responsive Design */
         @media (max-width: 1024px) {
             .hero-content {
@@ -1185,7 +1185,7 @@
                             behavior: 'smooth',
                             block: 'start'
                         });
-                    }
+                }
                 });
             });
             
