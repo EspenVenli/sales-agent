@@ -1,0 +1,15 @@
+{
+  "name": "phone-agent",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "start": "cd outbound-calling-speech-assistant-openai-realtime-api-node && npm install && node index.js",
+    "build": "cd outbound-calling-speech-assistant-openai-realtime-api-node && npm install",
+    "dev": "cd outbound-calling-speech-assistant-openai-realtime-api-node && node index.js"
+  },
+  "dependencies": {},
+  "description": "Voice phone agent powered by OpenAI and Twilio"
+}
