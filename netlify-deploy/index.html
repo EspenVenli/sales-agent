@@ -215,7 +215,7 @@
             min-height: 100vh;
             display: flex;
             align-items: center;
-            background: linear-gradient(135deg, var(--background) 0%, var(--surface) 100%);
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
             overflow: hidden;
         }
         
@@ -227,8 +227,8 @@
             right: 0;
             bottom: 0;
             background: 
-                radial-gradient(circle at 20% 20%, rgba(59, 130, 246, 0.1) 0%, transparent 50%),
-                radial-gradient(circle at 80% 80%, rgba(139, 92, 246, 0.1) 0%, transparent 50%);
+                radial-gradient(circle at 25% 25%, rgba(59, 130, 246, 0.05) 0%, transparent 50%),
+                radial-gradient(circle at 75% 75%, rgba(139, 92, 246, 0.05) 0%, transparent 50%);
             z-index: 1;
         }
         
@@ -759,14 +759,6 @@
                             </div>
                             
                             <div class="form-group">
-                                <label class="form-label" for="destination">Guest Notes</label>
-                                <div class="form-input">
-                                    <input type="text" id="destination" name="destination" placeholder="Room preferences, special occasions...">
-                                    <i class="fas fa-sticky-note form-icon"></i>
-                                </div>
-                            </div>
-                            
-                            <div class="form-group">
                                 <label class="form-label" for="arrivalAirport">Special Requests</label>
                                 <div class="form-input">
                                     <input type="text" id="arrivalAirport" name="arrivalAirport" placeholder="Airport pickup, spa booking...">
@@ -967,7 +959,7 @@
                 const guestDetails = {
                     checkInDate: document.getElementById('departureDate').value,
                     checkOutDate: document.getElementById('returnDate').value,
-                    notes: document.getElementById('destination').value,
+                    notes: '',
                     specialRequests: document.getElementById('arrivalAirport').value
                 };
                 
