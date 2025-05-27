@@ -215,7 +215,7 @@
             min-height: 100vh;
             display: flex;
             align-items: center;
-            background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
+            background: linear-gradient(135deg, #000000 0%, #0a0a23 25%, #1a1a3a 50%, #2563eb 100%);
             overflow: hidden;
         }
         
@@ -227,14 +227,53 @@
             right: 0;
             bottom: 0;
             background: 
-                radial-gradient(circle at 25% 25%, rgba(59, 130, 246, 0.05) 0%, transparent 50%),
-                radial-gradient(circle at 75% 75%, rgba(139, 92, 246, 0.05) 0%, transparent 50%);
+                radial-gradient(circle at 20% 80%, rgba(37, 99, 235, 0.3) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(59, 130, 246, 0.2) 0%, transparent 50%),
+                radial-gradient(circle at 40% 40%, rgba(29, 78, 216, 0.1) 0%, transparent 50%);
+            animation: backgroundPulse 8s ease-in-out infinite alternate;
             z-index: 1;
+        }
+        
+        .hero::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                linear-gradient(45deg, transparent 30%, rgba(59, 130, 246, 0.05) 50%, transparent 70%),
+                linear-gradient(-45deg, transparent 30%, rgba(37, 99, 235, 0.05) 50%, transparent 70%);
+            animation: backgroundShift 12s linear infinite;
+            z-index: 2;
+        }
+        
+        @keyframes backgroundPulse {
+            0% { 
+                opacity: 0.7; 
+                transform: scale(1) rotate(0deg);
+            }
+            100% { 
+                opacity: 1; 
+                transform: scale(1.1) rotate(5deg);
+            }
+        }
+        
+        @keyframes backgroundShift {
+            0% { 
+                background-position: 0% 0%, 100% 100%;
+            }
+            50% { 
+                background-position: 100% 100%, 0% 0%;
+            }
+            100% { 
+                background-position: 0% 0%, 100% 100%;
+            }
         }
         
         .hero-content {
             position: relative;
-            z-index: 2;
+            z-index: 10;
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: var(--space-16);
@@ -644,7 +683,6 @@
             <div class="header-content">
                 <a href="#" class="logo">
                     <img src="https://newsvgs.s3.us-west-2.amazonaws.com/venli.logo3.png" alt="Venli Logo">
-                    <span>Venli</span>
                 </a>
                 
                 <a href="https://venli.app" class="nav-link">
@@ -664,8 +702,8 @@
                     
                     <div class="hero-cta">
                         <a href="#demo" class="btn btn-secondary btn-lg">
-                            <i class="fas fa-play"></i>
-                            Watch Demo
+                            <i class="fas fa-calendar-alt"></i>
+                            Request Demo
                         </a>
                         <a href="#features" class="btn btn-secondary">
                             Learn More
@@ -891,7 +929,6 @@
             <div class="footer-content">
                 <div class="logo">
                     <img src="https://newsvgs.s3.us-west-2.amazonaws.com/venli.logo3.png" alt="Venli Logo">
-                    <span>Venli</span>
                 </div>
                 
                 <div class="footer-links">
