@@ -206,6 +206,9 @@ fastify.register(async (fastify) => {
         let streamSid = null;
         let callActive = false;
         let userLanguage = 'en-US'; // Variable to store the language for this call
+        let aiCurrentlySpeaking = false; // Track if AI is currently generating/speaking
+        let lastUserSpeechTime = 0; // Track when user last spoke
+        let speechStartTime = 0; // Track when current speech started
 
         // Define sendInitialSessionUpdate first
         const sendInitialSessionUpdate = () => {
@@ -223,9 +226,9 @@ fastify.register(async (fastify) => {
                 session: {
                     turn_detection: { 
                         type: 'server_vad',
-                        threshold: 0.2,
-                        prefix_padding_ms: 50,
-                        silence_duration_ms: 200
+                        threshold: 0.7,
+                        prefix_padding_ms: 100,
+                        silence_duration_ms: 800
                     },
                     input_audio_format: 'g711_ulaw',
                     output_audio_format: 'g711_ulaw',
@@ -279,15 +282,6 @@ fastify.register(async (fastify) => {
                      case 'media':
                          if (!callSid || !callActive) { return; }
                          if (openAiWs && openAiWs.readyState === WebSocket.OPEN) { 
-                            // Immediately cancel any ongoing AI response when user audio is detected
-                            try {
-                                openAiWs.send(JSON.stringify({
-                                    type: 'response.cancel'
-                                }));
-                            } catch (e) {
-                                // Ignore errors for response.cancel
-                            }
-                            
                             const audioAppend = { type: 'input_audio_buffer.append', audio: data.media.payload };
                             openAiWs.send(JSON.stringify(audioAppend));
                          }
@@ -446,6 +440,7 @@ fastify.register(async (fastify) => {
                                 openAiWs.send(JSON.stringify(initialConversationItem));
 
                                 console.log(`[${connectionId}][${callSid}] Requesting initial response from OpenAI.`);
+                                aiCurrentlySpeaking = true; // AI is about to start speaking
                                 openAiWs.send(JSON.stringify({ 
                                     type: 'response.create',
                                     response: {
@@ -457,28 +452,31 @@ fastify.register(async (fastify) => {
                                 break;
 
                             case 'input_audio_buffer.speech_started':
-                                console.log(`[${connectionId}][${callSid}] 🚨 USER STARTED SPEAKING - IMMEDIATE INTERRUPTION`);
-                                // Cancel any ongoing AI response to allow interruption - send multiple times to ensure it works
-                                try {
+                                const currentTime = Date.now();
+                                speechStartTime = currentTime;
+                                
+                                console.log(`[${connectionId}][${callSid}] User started speaking`);
+                                console.log(`[${connectionId}][${callSid}] AI currently speaking: ${aiCurrentlySpeaking}`);
+                                console.log(`[${connectionId}][${callSid}] Time since last user speech: ${currentTime - lastUserSpeechTime}ms`);
+                                
+                                // Only cancel AI response if:
+                                // 1. AI is currently speaking/generating
+                                // 2. It's been at least 500ms since the last user speech (avoid rapid fire interruptions)
+                                if (aiCurrentlySpeaking && (currentTime - lastUserSpeechTime > 500)) {
+                                    console.log(`[${connectionId}][${callSid}] Valid interruption detected - cancelling AI response`);
                                     openAiWs.send(JSON.stringify({
                                         type: 'response.cancel'
                                     }));
-                                    // Send again to be absolutely sure
-                                    setTimeout(() => {
-                                        if (openAiWs && openAiWs.readyState === WebSocket.OPEN) {
-                                            openAiWs.send(JSON.stringify({
-                                                type: 'response.cancel'
-                                            }));
-                                        }
-                                    }, 10);
-                                } catch (e) {
-                                    console.error(`[${connectionId}][${callSid}] Error sending response.cancel:`, e.message);
+                                    aiCurrentlySpeaking = false;
+                                } else {
+                                    console.log(`[${connectionId}][${callSid}] Speech detected but not interrupting (AI not speaking or too soon after last speech)`);
                                 }
-                                console.log(`[${connectionId}][${callSid}] ✅ SENT AGGRESSIVE RESPONSE.CANCEL FOR INTERRUPTION`);
                                 break;
 
                             case 'input_audio_buffer.speech_stopped':
-                                console.log(`[${connectionId}][${callSid}] User stopped speaking`);
+                                lastUserSpeechTime = Date.now();
+                                const speechDuration = lastUserSpeechTime - speechStartTime;
+                                console.log(`[${connectionId}][${callSid}] User stopped speaking after ${speechDuration}ms`);
                                 break;
 
                             case 'conversation.item.created':
@@ -512,6 +510,7 @@ fastify.register(async (fastify) => {
                             case 'input_audio_buffer.committed':
                                 console.log(`[${connectionId}][${callSid}] Audio buffer committed - user finished speaking`);
                                 // User finished speaking → ask for AI response with both text and audio
+                                aiCurrentlySpeaking = true; // AI is about to start speaking
                                 openAiWs.send(JSON.stringify({
                                     type: 'response.create',
                                     response: {
@@ -519,7 +518,7 @@ fastify.register(async (fastify) => {
                                         instructions: 'Always provide both text and audio responses. Include the text version of everything you say.'
                                     }
                                 }));
-                                console.log(`[${connectionId}][${callSid}] Requested new response with text and audio`);
+                                console.log(`[${connectionId}][${callSid}] Requested new response with text and audio - AI now speaking`);
                                 break;
 
                             case 'conversation.item.input_audio_transcription.completed':
@@ -593,6 +592,9 @@ fastify.register(async (fastify) => {
 
                             case 'response.done':
                                 console.log(`[${connectionId}][${callSid}] Response done:`, JSON.stringify(response, null, 2));
+                                aiCurrentlySpeaking = false; // AI finished speaking
+                                console.log(`[${connectionId}][${callSid}] AI finished speaking`);
+                                
                                 // Pull the final transcript from response.done
                                 const items = response.response?.output || [];
                                 const assistantItem = items.find(i => i.role === 'assistant');
@@ -619,7 +621,8 @@ fastify.register(async (fastify) => {
 
                             case 'response.cancelled':
                                 console.log(`[${connectionId}][${callSid}] Response cancelled:`, JSON.stringify(response, null, 2));
-                                console.log(`[${connectionId}][${callSid}] ✅ AI RESPONSE CANCELLED - user can interrupt`);
+                                aiCurrentlySpeaking = false; // AI stopped speaking due to interruption
+                                console.log(`[${connectionId}][${callSid}] ✅ AI RESPONSE CANCELLED - user successfully interrupted`);
                                 break;
 
                             default:
