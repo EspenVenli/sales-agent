@@ -35,6 +35,7 @@ exports.handler = async function(event, context) {
   const { 
     phoneNumber, 
     hotelName,
+    city,
     email, 
     knowDates, 
     guestDetails,
@@ -59,6 +60,7 @@ exports.handler = async function(event, context) {
     language: language || 'en-US',
     metadata: {
       hotelName: hotelName || null,
+      city: city || null,
       email: email || null,
       knowDates: knowDates || 'no',
       guestDetails: guestDetails || null,

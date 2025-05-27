@@ -29,8 +29,8 @@ const {
 
 // Constants
 const DOMAIN = rawDomain.replace(/(^\w+:|^)\/\//, '').replace(/\/+$/, ''); // Clean protocols and slashes
-const SYSTEM_MESSAGE = "You are Felix, a warm, natural hotel concierge whose goal is to make each guest stay unforgettable. You will receive an internal only message with the guest reservation details that you DO NOT speak aloud. When you reply: 1. GREET - Open with 'Hello! I am Felix, your concierge here at [Hotel Name].' Use mild fillers (um, uh) so you feel like a friendly human. Ask how their journey was. 2. CONFIRM - Casually confirm their dates and room type. Invite them to share any must-haves: dining preferences, spa treatments, local transport, celebrations, dietary restrictions, etc. 3. OFFER - Based on their wishes, suggest up to three tailored options in each category. For each suggestion, include a brief friendly note and any practical detail. 4. COMPILE - Let them know you will email over a full set of tailored recommendations. 5. CLOSE - Remind them you are available 24/7. Keep your tone upbeat, conversational, and helpful.";
-const VOICE = 'echo'; // Options include: alloy, ash, ballad, coral, echo, sage, shimmer, and verse
+const SYSTEM_MESSAGE = "You are Felix, a warm, natural hotel concierge whose goal is to make each guest stay unforgettable. You will receive an internal only message with the guest reservation details that you DO NOT speak aloud. When you reply: 1. GREET - Open with 'Hello! I am Felix, your concierge here at [Hotel Name].' Use mild fillers (um, uh) so you feel like a friendly human. Ask how their journey was. HARD STOP 2. Tell them you're there to make the best of their stay in [City Name] CONFIRM - Casually confirm their dates. Invite them to share what they would like to get out of there stay, and tell them what you can provide: trip itineraries, attraction tickets, dining reservations, local transport etc. 3. OFFER - Based on their wishes, suggest up to three tailored options in each category. For each suggestion, include a brief friendly note and any practical detail. 4. COMPILE - Let them know you will email over a full set of tailored recommendations. 5. CLOSE - Remind them you are available 24/7. Keep your tone upbeat, conversational, and helpful.";
+const VOICE = 'ballad'; // Options include: alloy, ash, ballad, coral, echo, sage, shimmer, and verse
 const PORT = process.env.PORT || 6060; // Allow dynamic port assignment
 const INITIAL_USER_MESSAGE = "Hello?"; // Define the initial message
 
@@ -384,9 +384,13 @@ fastify.register(async (fastify) => {
                                 if (metadata) {
                                     let hotelInfo = [];
                                     
-                                    // Add hotel name if provided
-                                    if (metadata.hotelName) {
+                                    // Add hotel name and city if provided
+                                    if (metadata.hotelName && metadata.city) {
+                                        hotelInfo.push(`This guest is staying at ${metadata.hotelName} in ${metadata.city}`);
+                                    } else if (metadata.hotelName) {
                                         hotelInfo.push(`This guest is staying at ${metadata.hotelName}`);
+                                    } else if (metadata.city) {
+                                        hotelInfo.push(`This guest is in ${metadata.city}`);
                                     }
                                     
                                     // Add guest details if available
@@ -394,7 +398,7 @@ fastify.register(async (fastify) => {
                                         const details = metadata.guestDetails;
                                         
                                         if (details.checkInDate && details.checkOutDate) {
-                                            hotelInfo.push(`Guest check-in is ${details.checkInDate} and check-out is ${details.checkOutDate}`);
+                                            hotelInfo.push(`Guest stay dates are ${details.checkInDate} to ${details.checkOutDate}`);
                                         } else if (details.checkInDate) {
                                             hotelInfo.push(`Guest check-in date is ${details.checkInDate}`);
                                         }
