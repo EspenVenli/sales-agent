@@ -1277,7 +1277,12 @@
                     loadingSpinner.style.display = 'none';
                     requestButton.disabled = false;
                     if (result.success) {
-                        showStatus('success', 'Call request received! Our AI concierge will call you momentarily.');
+                        const email = document.getElementById('email').value.trim();
+                        let successMessage = 'Call request received! Our AI concierge will call you momentarily.';
+                        if (email) {
+                            successMessage += ' You will also receive an email confirmation with details.';
+                        }
+                        showStatus('success', successMessage);
                     } else {
                         showStatus('error', result.message || 'Something went wrong. Please try again.');
                     }

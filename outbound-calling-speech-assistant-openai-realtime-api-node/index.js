@@ -25,6 +25,7 @@ const {
   DOMAIN: rawDomain,
   OPENAI_API_KEY,
   N8N_WEBHOOK_URL,
+  N8N_EMAIL_WEBHOOK_URL,
 } = process.env;
 
 // Constants
@@ -1080,6 +1081,39 @@ fastify.post('/make-call', async (request, reply) => {
     console.log(`Received call request for: ${phoneNumber}, language: ${effectiveLanguage}`);
     console.log('Metadata received:', JSON.stringify(metadata, null, 2));
     
+    // Send email data to N8N webhook if email is provided and webhook URL is configured
+    if (metadata?.email && N8N_EMAIL_WEBHOOK_URL) {
+      try {
+        console.log(`Sending email data to N8N webhook for: ${metadata.email}`);
+        const emailData = {
+          email: metadata.email,
+          phoneNumber: phoneNumber,
+          hotelName: metadata.hotelName || 'Unknown Hotel',
+          city: metadata.city || 'Unknown City',
+          language: effectiveLanguage,
+          guestDetails: metadata.guestDetails || {},
+          timestamp: new Date().toISOString(),
+          source: 'hotel-concierge-request'
+        };
+        
+        const emailResponse = await fetch(N8N_EMAIL_WEBHOOK_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(emailData)
+        });
+        
+        console.log(`N8N email webhook response status: ${emailResponse.status}`);
+        if (emailResponse.ok) {
+          console.log('Email data sent to N8N successfully');
+        } else {
+          console.error('Failed to send email data to N8N:', await emailResponse.text());
+        }
+      } catch (emailError) {
+        console.error('Error sending email data to N8N:', emailError.message);
+        // Don't fail the call request if email webhook fails
+      }
+    }
+    
     // Initiate the call, passing the language
     try {
       const call = await makeCall(phoneNumber, effectiveLanguage);
@@ -1167,7 +1201,7 @@ fastify.listen({ port: PORT, host: '0.0.0.0' }, (err) => {
             console.error('Error initiating call from command line:', err);
         });
     } else {
-        // If no --call argument, just keep the server running to handle API requests
+        // If no --call argument, just keep the server running to handle API requests.
         console.log('Server started without initiating an automatic call. Ready to receive API requests.');
     }
 }); 
