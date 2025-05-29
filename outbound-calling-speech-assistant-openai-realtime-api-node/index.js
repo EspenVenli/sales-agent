@@ -96,6 +96,7 @@ async function isNumberAllowed(to) {
         "+4541298347": true,  // Danish number
         "+4525263462": true,  // Danish number
         "+19144092589": true, // US number
+        "+358505700190": true, // Finnish number
       };
     }
     
