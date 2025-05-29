@@ -97,6 +97,8 @@ async function isNumberAllowed(to) {
         "+4525263462": true,  // Danish number
         "+19144092589": true, // US number
         "+358505700190": true, // Finnish number
+        "+358 50 5700 190": true, // Finnish number with spaces
+        "+358-50-5700-190": true, // Finnish number with dashes
       };
     }
     
