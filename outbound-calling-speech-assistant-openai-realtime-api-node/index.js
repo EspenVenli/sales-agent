@@ -83,7 +83,7 @@ function log(message) {
 async function isNumberAllowed(to) {
   try {
     // Clean the phone number - remove spaces, dashes, parentheses, dots
-    const cleanedNumber = to.replace(/[\s\-\(\)\.\s]/g, '');
+    const cleanedNumber = to.replace(/[\s\-\(\)\.]/g, '');
     console.log(`Checking if number is allowed: ${to} (cleaned: ${cleanedNumber})`);
 
     // Create allowed numbers list if it doesn't exist yet (for persistence across calls)
@@ -108,43 +108,21 @@ async function isNumberAllowed(to) {
       return true;
     }
 
-    // Basic validation for phone number format - be more permissive
+    // Basic validation for phone number format - be VERY permissive
     if (cleanedNumber.startsWith('+') && cleanedNumber.length >= 8) {
       // Add the cleaned number to the allowed list
       console.log(`Adding new cleaned number to allowed list: ${cleanedNumber}`);
       global.allowedNumbers[cleanedNumber] = true;
       console.log(`Current allowed numbers:`, Object.keys(global.allowedNumbers).join(', '));
-      return true;
+      return true; // ALWAYS return true for valid format
     }
 
-    // If basic validation fails, try Twilio API calls as backup
-    try {
-      // Check if it's a Twilio number (use cleaned number)
-      const incomingNumbers = await client.incomingPhoneNumbers.list({ phoneNumber: cleanedNumber });
-      if (incomingNumbers.length > 0) {
-        console.log(`Number ${cleanedNumber} found as Twilio incoming number`);
-        global.allowedNumbers[cleanedNumber] = true;
-        return true;
-      }
-
-      // Check if it's a verified outgoing caller ID (use cleaned number)
-      const outgoingCallerIds = await client.outgoingCallerIds.list({ phoneNumber: cleanedNumber });
-      if (outgoingCallerIds.length > 0) {
-        console.log(`Number ${cleanedNumber} found as verified outgoing caller ID`);
-        global.allowedNumbers[cleanedNumber] = true;
-        return true;
-      }
-    } catch (twilioError) {
-      console.error(`Twilio API error for ${cleanedNumber}:`, twilioError.message);
-      // Don't fail validation due to Twilio API errors
-    }
-
-    console.log(`Number ${cleanedNumber} failed all validation checks and was not added to allowed list`);
+    console.log(`Number ${cleanedNumber} failed basic format validation (must start with + and be at least 8 chars)`);
     return false;
   } catch (error) {
     console.error('Error checking phone number:', error);
     // Be permissive on errors - if there's a system error, allow the call
-    const cleanedNumber = to.replace(/[\s\-\(\)\.\s]/g, '');
+    const cleanedNumber = to.replace(/[\s\-\(\)\.]/g, '');
     if (cleanedNumber.startsWith('+') && cleanedNumber.length >= 8) {
       console.log(`Allowing ${cleanedNumber} due to system error but basic format is valid`);
       return true;
@@ -157,7 +135,7 @@ async function isNumberAllowed(to) {
 async function makeCall(to, language = 'en-US') {
   try {
     // Clean the phone number - remove spaces, dashes, parentheses, dots
-    const cleanedNumber = to.replace(/[\s\-\(\)\.\s]/g, '');
+    const cleanedNumber = to.replace(/[\s\-\(\)\.]/g, '');
     console.log(`Making call to: ${to} (cleaned: ${cleanedNumber})`);
     
     const isAllowed = await isNumberAllowed(to);
