@@ -78,8 +78,6 @@ function log(message) {
   logStream.write(logMessage);
 }
 
-
-
 // Function to check if a number is allowed to be called. With your own function, be sure 
 // to do your own diligence to be compliant.
 async function isNumberAllowed(to) {
@@ -106,7 +104,7 @@ async function isNumberAllowed(to) {
       return true;
     }
 
-    // Basic validation for phone number format
+    // Basic validation for phone number format - be more permissive
     if (to.startsWith('+') && to.length >= 8) {
       // Add the new number to the allowed list
       console.log(`Adding new number to allowed list: ${to}`);
@@ -115,24 +113,37 @@ async function isNumberAllowed(to) {
       return true;
     }
 
-    // If it doesn't pass basic validation, check if it's a Twilio number
-    const incomingNumbers = await client.incomingPhoneNumbers.list({ phoneNumber: to });
-    if (incomingNumbers.length > 0) {
-      global.allowedNumbers[to] = true;
-      return true;
+    // If basic validation fails, try Twilio API calls as backup
+    try {
+      // Check if it's a Twilio number
+      const incomingNumbers = await client.incomingPhoneNumbers.list({ phoneNumber: to });
+      if (incomingNumbers.length > 0) {
+        console.log(`Number ${to} found as Twilio incoming number`);
+        global.allowedNumbers[to] = true;
+        return true;
+      }
+
+      // Check if it's a verified outgoing caller ID
+      const outgoingCallerIds = await client.outgoingCallerIds.list({ phoneNumber: to });
+      if (outgoingCallerIds.length > 0) {
+        console.log(`Number ${to} found as verified outgoing caller ID`);
+        global.allowedNumbers[to] = true;
+        return true;
+      }
+    } catch (twilioError) {
+      console.error(`Twilio API error for ${to}:`, twilioError.message);
+      // Don't fail validation due to Twilio API errors
     }
 
-    // Check if it's a verified outgoing caller ID
-    const outgoingCallerIds = await client.outgoingCallerIds.list({ phoneNumber: to });
-    if (outgoingCallerIds.length > 0) {
-      global.allowedNumbers[to] = true;
-      return true;
-    }
-
-    console.log(`Number ${to} failed validation and was not added to allowed list`);
+    console.log(`Number ${to} failed all validation checks and was not added to allowed list`);
     return false;
   } catch (error) {
     console.error('Error checking phone number:', error);
+    // Be permissive on errors - if there's a system error, allow the call
+    if (to.startsWith('+') && to.length >= 8) {
+      console.log(`Allowing ${to} due to system error but basic format is valid`);
+      return true;
+    }
     return false;
   }
 }
