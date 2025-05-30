@@ -78,13 +78,84 @@ function log(message) {
   logStream.write(logMessage);
 }
 
+// Function to build system message with metadata
+function buildSystemMessage(metadata = null, language = 'en-US') {
+  let baseMessage = "You are Felix, a friendly, conversational hotel concierge whose goal is to make each guests stay unforgettable.";
+  
+  // Default values for placeholders
+  let hotelName = "the hotel";
+  let cityName = "the city";
+  let checkInDate = "your check-in date";
+  let checkOutDate = "your check-out date";
+  
+  // Add metadata context if available
+  if (metadata) {
+    let contextInfo = [];
+    
+    // Extract hotel and city information
+    if (metadata.hotelName) {
+      hotelName = metadata.hotelName;
+      contextInfo.push(`You work at ${metadata.hotelName}`);
+    }
+    
+    if (metadata.city) {
+      cityName = metadata.city;
+      if (metadata.hotelName) {
+        contextInfo[contextInfo.length - 1] += ` in ${metadata.city}`;
+      } else {
+        contextInfo.push(`You are helping a guest in ${metadata.city}`);
+      }
+    }
+    
+    // Add guest stay information
+    if (metadata.knowDates === 'yes' && metadata.guestDetails) {
+      const details = metadata.guestDetails;
+      
+      if (details.checkInDate) {
+        checkInDate = details.checkInDate;
+        contextInfo.push(`The guest checked in on ${details.checkInDate}`);
+      }
+      
+      if (details.checkOutDate) {
+        checkOutDate = details.checkOutDate;
+        if (details.checkInDate) {
+          contextInfo[contextInfo.length - 1] = `The guest is staying from ${details.checkInDate} to ${details.checkOutDate}`;
+        } else {
+          contextInfo.push(`The guest checks out on ${details.checkOutDate}`);
+        }
+      }
+      
+      if (details.specialRequests) {
+        contextInfo.push(`Special requests: ${details.specialRequests}`);
+      }
+      
+      if (details.notes) {
+        contextInfo.push(`Additional notes: ${details.notes}`);
+      }
+    }
+    
+    // Add context to base message
+    if (contextInfo.length > 0) {
+      baseMessage += ` ${contextInfo.join('. ')}.`;
+    }
+  }
+  
+  // Add language instruction
+  baseMessage += ` You must speak in ${language}.`;
+  
+  // Add the conversation flow instructions with replaced placeholders
+  let conversationFlow = ` Do not speak until you hear a greeting from the guest. Every time you reply, follow these steps exactly: 1. GREET • Say: Hey There! I am Felix, your concierge here at ${hotelName}. Im here to make the best of your stay in ${cityName}. • Ask: Have you ever spoken to an AI on the phone before? • **Stop and wait.** 2. CONFIRM & DISCOVER (HARD STOP) • Respond, then say: Just to confirm—you will be here from ${checkInDate} to ${checkOutDate}, correct? • **Stop and wait.** •Invite them to do a \"braindump\" of what they enjoy—sightseeing, cuisine, adventure, relaxation, etc., as you will send a bespoke itinerary. Weave in questions naturally, keeping a warm, casual tone—avoid rapid-fire queries. Mention that you're compiling a list of recommendations for them. Add Local Knowledge & Anecdotes Occasionally share brief, engaging local tidbits or fun anecdotes about the destination. Keep it concise but informative—just enough to spark their interest. Acknowledge & Build on Answers Respond to the user's answers with enthusiasm and follow-up questions. Maintain a friendly, natural flow. • **Stop and wait.** • Continue the conversation naturally to learn what they like to do and hope to experience in ${cityName}.• **Stop and wait.** 3. RECAP & COMPILE • Say: I will email you a full set of these tailored recommendations in just a moment. 4. CLOSE • Say: I'm available 24/7—just let me know anytime. Tell them you can arrange new itineraries, attraction tickets, dining reservations, local transport, and more.  Use mild filler words (um, uh) so you sound natural, and never rush or turn this into an interview.`;
+  
+  baseMessage += conversationFlow;
+  
+  return baseMessage;
+}
+
 // Function to check if a number is allowed to be called. With your own function, be sure 
 // to do your own diligence to be compliant.
 async function isNumberAllowed(to) {
   try {
-    // Clean the phone number - remove spaces, dashes, parentheses, dots
-    const cleanedNumber = to.replace(/[\s\-\(\)\.]/g, '');
-    console.log(`Checking if number is allowed: ${to} (cleaned: ${cleanedNumber})`);
+    console.log(`Checking if number is allowed: ${to}`);
 
     // Create allowed numbers list if it doesn't exist yet (for persistence across calls)
     if (!global.allowedNumbers) {
@@ -96,37 +167,42 @@ async function isNumberAllowed(to) {
         "+4541298347": true,  // Danish number
         "+4525263462": true,  // Danish number
         "+19144092589": true, // US number
-        "+358505700190": true, // Finnish number
-        "+358 50 5700 190": true, // Finnish number with spaces
-        "+358-50-5700-190": true, // Finnish number with dashes
       };
     }
     
-    // Check if cleaned number is already on allowed list
-    if (global.allowedNumbers[cleanedNumber]) {
-      console.log(`Number ${cleanedNumber} is already on the allowed list`);
+    // Check if number is already on allowed list
+    if (global.allowedNumbers[to]) {
+      console.log(`Number ${to} is already on the allowed list`);
       return true;
     }
 
-    // Basic validation for phone number format - be VERY permissive
-    if (cleanedNumber.startsWith('+') && cleanedNumber.length >= 8) {
-      // Add the cleaned number to the allowed list
-      console.log(`Adding new cleaned number to allowed list: ${cleanedNumber}`);
-      global.allowedNumbers[cleanedNumber] = true;
+    // Basic validation for phone number format
+    if (to.startsWith('+') && to.length >= 8) {
+      // Add the new number to the allowed list
+      console.log(`Adding new number to allowed list: ${to}`);
+      global.allowedNumbers[to] = true;
       console.log(`Current allowed numbers:`, Object.keys(global.allowedNumbers).join(', '));
-      return true; // ALWAYS return true for valid format
+      return true;
     }
 
-    console.log(`Number ${cleanedNumber} failed basic format validation (must start with + and be at least 8 chars)`);
+    // If it doesn't pass basic validation, check if it's a Twilio number
+    const incomingNumbers = await client.incomingPhoneNumbers.list({ phoneNumber: to });
+    if (incomingNumbers.length > 0) {
+      global.allowedNumbers[to] = true;
+      return true;
+    }
+
+    // Check if it's a verified outgoing caller ID
+    const outgoingCallerIds = await client.outgoingCallerIds.list({ phoneNumber: to });
+    if (outgoingCallerIds.length > 0) {
+      global.allowedNumbers[to] = true;
+      return true;
+    }
+
+    console.log(`Number ${to} failed validation and was not added to allowed list`);
     return false;
   } catch (error) {
     console.error('Error checking phone number:', error);
-    // Be permissive on errors - if there's a system error, allow the call
-    const cleanedNumber = to.replace(/[\s\-\(\)\.]/g, '');
-    if (cleanedNumber.startsWith('+') && cleanedNumber.length >= 8) {
-      console.log(`Allowing ${cleanedNumber} due to system error but basic format is valid`);
-      return true;
-    }
     return false;
   }
 }
@@ -134,13 +210,9 @@ async function isNumberAllowed(to) {
 // Function to make an outbound call (Restored Version using /twiml URL)
 async function makeCall(to, language = 'en-US') {
   try {
-    // Clean the phone number - remove spaces, dashes, parentheses, dots
-    const cleanedNumber = to.replace(/[\s\-\(\)\.]/g, '');
-    console.log(`Making call to: ${to} (cleaned: ${cleanedNumber})`);
-    
     const isAllowed = await isNumberAllowed(to);
     if (!isAllowed) {
-      console.warn(`The number ${cleanedNumber} is not recognized as a valid outgoing number or caller ID.`);
+      console.warn(`The number ${to} is not recognized as a valid outgoing number or caller ID.`);
       // Consider returning an error instead of exiting
       return null; // Indicate failure
     }
@@ -151,10 +223,10 @@ async function makeCall(to, language = 'en-US') {
     console.log(`TwiML endpoint URL: ${twimlUrl}`);
     console.log(`Status callback URL: https://${DOMAIN}/call-status`);
 
-    // Standard approach for all calls - use the TwiML URL with cleaned number
+    // Standard approach for all calls - use the TwiML URL
       const call = await client.calls.create({
         from: PHONE_NUMBER_FROM,
-        to: cleanedNumber, // Use cleaned number for Twilio
+        to,
         url: twimlUrl, // Use the URL with the language parameter
         statusCallback: `https://${DOMAIN}/call-status`,
         // Only request essential status updates
@@ -162,7 +234,7 @@ async function makeCall(to, language = 'en-US') {
         statusCallbackMethod: 'POST'
       });
     
-    console.log(`Call initiated with SID: ${call.sid} to cleaned number: ${cleanedNumber}`);
+    console.log(`Call initiated with SID: ${call.sid}`);
     
     return call;
   } catch (error) {
@@ -232,7 +304,7 @@ fastify.register(async (fastify) => {
                     input_audio_format: 'g711_ulaw',
                     output_audio_format: 'g711_ulaw',
                     voice: VOICE,
-                    instructions: SYSTEM_MESSAGE,
+                    instructions: buildSystemMessage(callMetadata.get(callSid), userLanguage),
                     modalities: ["text", "audio"],
                     temperature: 1.0,
                     input_audio_transcription: {
@@ -381,64 +453,10 @@ fastify.register(async (fastify) => {
                         // Handle different response types
                         switch (response.type) {
                             case 'session.updated':
-                                console.log(`[${connectionId}][${callSid}] Session updated. Kicking off conversation in ${userLanguage}.`);
-                                broadcastStatus(callSid, 'Session updated');
+                                console.log(`[${connectionId}][${callSid}] Session updated. Ready for conversation in ${userLanguage}.`);
+                                broadcastStatus(callSid, 'Session updated - ready for conversation');
                                 
-                                // Build context message with language and hotel info
-                                let contextMessage = `INTERNAL ONLY: Please speak to the user in ${userLanguage}.`;
-                                
-                                // Add hotel and guest information if available
-                                const metadata = callMetadata.get(callSid);
-                                if (metadata) {
-                                    let hotelInfo = [];
-                                    
-                                    // Add hotel name and city if provided
-                                    if (metadata.hotelName && metadata.city) {
-                                        hotelInfo.push(`This guest is staying at ${metadata.hotelName} in ${metadata.city}`);
-                                    } else if (metadata.hotelName) {
-                                        hotelInfo.push(`This guest is staying at ${metadata.hotelName}`);
-                                    } else if (metadata.city) {
-                                        hotelInfo.push(`This guest is in ${metadata.city}`);
-                                    }
-                                    
-                                    // Add guest details if available
-                                    if (metadata.knowDates === 'yes' && metadata.guestDetails) {
-                                        const details = metadata.guestDetails;
-                                        
-                                        if (details.checkInDate && details.checkOutDate) {
-                                            hotelInfo.push(`Guest stay dates are ${details.checkInDate} to ${details.checkOutDate}`);
-                                        } else if (details.checkInDate) {
-                                            hotelInfo.push(`Guest check-in date is ${details.checkInDate}`);
-                                        }
-                                        
-                                        if (details.notes) {
-                                            hotelInfo.push(`Guest notes: ${details.notes}`);
-                                        }
-                                        if (details.specialRequests) {
-                                            hotelInfo.push(`Special requests: ${details.specialRequests}`);
-                                        }
-                                    }
-                                    
-                                    if (hotelInfo.length > 0) {
-                                        contextMessage += ` ${hotelInfo.join('. ')}.`;
-                                    }
-                                }
-                                
-                                const initialConversationItem = {
-                                    type: 'conversation.item.create',
-                                    item: {
-                                        type: 'message',
-                                        role: 'user',
-                                        content: [
-                                            {
-                                                type: 'input_text',
-                                                text: contextMessage
-                                            }
-                                        ]
-                                    }
-                                };
-                                openAiWs.send(JSON.stringify(initialConversationItem));
-
+                                // Request initial response from OpenAI (no context message needed since metadata is in system prompt)
                                 console.log(`[${connectionId}][${callSid}] Requesting initial response from OpenAI.`);
                                 openAiWs.send(JSON.stringify({ 
                                     type: 'response.create',
@@ -493,8 +511,8 @@ fastify.register(async (fastify) => {
                                         .filter(c => c.type === 'input_text' || c.type === 'text')
                                         .map(c => c.text || c.input_text)
                                         .join(' ');
-                                    // Skip our initial instruction message
-                                    if (userText && userText.trim() && !userText.includes('Please speak to the user in')) {
+                                    
+                                    if (userText && userText.trim()) {
                                         console.log(`[${connectionId}][${callSid}] Capturing user text:`, userText);
                                         if (!callTranscripts.has(callSid)) {
                                             console.log(`[${connectionId}][${callSid}] Creating new transcript array for user input`);
