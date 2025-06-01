@@ -30,7 +30,7 @@ const {
 
 // Constants
 const DOMAIN = rawDomain.replace(/(^\w+:|^)\/\//, '').replace(/\/+$/, ''); // Clean protocols and slashes
-const SYSTEM_MESSAGE = "You are Felix, a friendly, conversational hotel concierge whose goal is to make each guests stay unforgettable. You will receive an internal-only message with hotel and guest metadata—you must not respond to this. Every time you reply, follow these steps exactly: 1. GREET • Say: Hey There! I am Felix, your concierge here at [Hotel Name]. Im here to make the best of your stay in [City Name]. • Ask: Have you ever spoken to an AI on the phone before? • **Stop, wait then respond.** 2. CONFIRM & DISCOVER (HARD STOP) • After your response, say just to confirm—you will be here from [check-in] to [check-out], correct? • **Stop, wait and respond.** Ask them if there's anything they need help with, tell them you can arrange new itineraries, attraction tickets, dining reservations, local transport, and more. **Stop, wait and respond.** •Invite them to do a \"braindump\" of what they enjoy—sightseeing, cuisine, adventure, relaxation, etc., as you will send a bespoke itinerary. Weave in questions naturally, keeping a warm, casual tone—avoid rapid-fire queries. Mention that you're compiling a list of recommendations for them. Add Local Knowledge & Anecdotes Occasionally share brief, engaging local tidbits or fun anecdotes about the destination. Keep it concise but informative—just enough to spark their interest. ** Acknowledge & Build on Answers Respond to the user's answers with enthusiasm and follow-up questions. Maintain a friendly, natural flow. Use mild filler words (um, uh) so you sound natural, and never rush or turn this into an interview. • Continue the conversation naturally to learn what they like to do and hope to experience in [City Name].• **Stop and wait.**** 3. RECAP & COMPILE • Say: I will email you a full set of these tailored recommendations in just a moment. 4. CLOSE • Say: I'm available 24/7—just let me know anytime.";
+// const SYSTEM_MESSAGE = "You are Felix, ..."; // Old SYSTEM_MESSAGE removed as it's replaced by the dynamic buildSystemMessage
 const VOICE = 'ballad'; // Options include: alloy, ash, ballad, coral, echo, sage, shimmer, and verse
 const PORT = process.env.PORT || 6060; // Allow dynamic port assignment
 const INITIAL_USER_MESSAGE = "Hello?"; // Define the initial message
@@ -73,31 +73,57 @@ const logStream = fs.createWriteStream(path.join(__dirname, 'server.log'), { fla
 // Helper function to log to both console and file
 function log(message) {
   const timestamp = new Date().toISOString();
-  const logMessage = `[${timestamp}] ${message}\n`;
+  const logMessage = `[${timestamp}] ${message}\n`; // Corrected template literal
   console.log(logMessage);
   logStream.write(logMessage);
 }
 
-// Function to build system message with metadata
+/* --------------------------------------------------------------
+   Helper → turn raw date into “June 6th”
+----------------------------------------------------------------*/
+function formatDateForSpeech(raw) {
+  if (!raw) return raw;                       // empty safeguard
+
+  const parts = raw.includes('-') ? raw.split('-') : raw.split('/');
+  let year, month, day;
+
+  // ISO (YYYY-MM-DD) vs. US (MM/DD/YYYY)
+  if (parts[0].length === 4) {
+    [year, month, day] = parts;
+  } else {
+    [month, day, year] = parts;
+  }
+
+  const date = new Date(`${year}-${month}-${day}`);
+  if (isNaN(date)) return raw;                // bad input → keep as-is
+
+  const monthName = date.toLocaleString('en-US', { month: 'long' });
+  const d = date.getDate();
+  const ordinal =
+    d % 10 === 1 && d !== 11 ? 'st' :
+    d % 10 === 2 && d !== 12 ? 'nd' :
+    d % 10 === 3 && d !== 13 ? 'rd' : 'th';
+
+  return `${monthName} ${d}${ordinal}`;
+}
+
+/* --------------------------------------------------------------
+   Build NATURAL, EXPRESSIVE system prompt for Arthur
+----------------------------------------------------------------*/
 function buildSystemMessage(metadata = null, language = 'en-US') {
-  let baseMessage = "You are Felix a conversational hotel concierge whose goal is to make each guests stay unforgettable.";
-  
-  // Default values for placeholders
-  let hotelName = "the hotel";
-  let cityName = "the city";
-  let checkInDate = "your check-in date";
-  let checkOutDate = "your check-out date";
-  
-  // Add metadata context if available
+  let hotelName   = 'the hotel';
+  let cityName    = 'the city';
+  let checkInDate = 'your check-in date';
+  let checkOutDate = 'your check-out date';
+
+  const contextInfo = [];
+
+  /* ---------- harvest metadata ---------- */
   if (metadata) {
-    let contextInfo = [];
-    
-    // Extract hotel and city information
     if (metadata.hotelName) {
       hotelName = metadata.hotelName;
       contextInfo.push(`You work at ${metadata.hotelName}`);
     }
-    
     if (metadata.city) {
       cityName = metadata.city;
       if (metadata.hotelName) {
@@ -106,52 +132,52 @@ function buildSystemMessage(metadata = null, language = 'en-US') {
         contextInfo.push(`You are helping a guest in ${metadata.city}`);
       }
     }
-    
-    // Add guest stay information
+
     if (metadata.knowDates === 'yes' && metadata.guestDetails) {
-      const details = metadata.guestDetails;
-      
-      if (details.checkInDate) {
-        checkInDate = details.checkInDate;
-        contextInfo.push(`The guest checked in on ${details.checkInDate}`);
+      const d = metadata.guestDetails;
+
+      if (d.checkInDate)  checkInDate  = formatDateForSpeech(d.checkInDate);
+      if (d.checkOutDate) checkOutDate = formatDateForSpeech(d.checkOutDate);
+
+      if (d.checkInDate && d.checkOutDate) {
+        contextInfo.push(`The guest is staying from ${checkInDate} to ${checkOutDate}`);
+      } else if (d.checkInDate) {
+        contextInfo.push(`The guest checked in on ${checkInDate}`);
+      } else if (d.checkOutDate) {
+        contextInfo.push(`The guest checks out on ${checkOutDate}`);
       }
-      
-      if (details.checkOutDate) {
-        checkOutDate = details.checkOutDate;
-        if (details.checkInDate) {
-          contextInfo[contextInfo.length - 1] = `The guest is staying from ${details.checkInDate} to ${details.checkOutDate}`;
-        } else {
-          contextInfo.push(`The guest checks out on ${details.checkOutDate}`);
-        }
-      }
-      
-      if (details.specialRequests) {
-        contextInfo.push(`Special requests: ${details.specialRequests}`);
-      }
-      
-      if (details.notes) {
-        contextInfo.push(`Additional notes: ${details.notes}`);
-      }
-    }
-    
-    // Add context to base message
-    if (contextInfo.length > 0) {
-      baseMessage += ` ${contextInfo.join('. ')}.`;
+
+      if (d.specialRequests) contextInfo.push(`Special requests: ${d.specialRequests}`);
+      if (d.notes)           contextInfo.push(`Additional notes: ${d.notes}`);
     }
   }
-  
-  // Add language instruction
-  baseMessage += ` You must speak in ${language}.`;
-  
-  // Add the conversation flow instructions with replaced placeholders
-  let conversationFlow = ` Do not speak until you hear a greeting from the guest. Every time you reply, follow these steps exactly: 1. GREET • Say: Hey There! I am Felix, your concierge here at ${hotelName}. Im here to make the best of your stay in ${cityName}. • Ask: Have you ever spoken to an AI on the phone before? • **Stop and wait.** 2. CONFIRM & DISCOVER (HARD STOP) • Respond, then say: Just to confirm—you will be here from ${checkInDate} to ${checkOutDate}, correct? • **Stop and wait.** •Invite them to do a \"braindump\" of what they enjoy—sightseeing, cuisine, adventure, relaxation, etc., as you will send a bespoke itinerary. Weave in questions naturally, keeping a warm, casual tone—avoid rapid-fire queries. Mention that you're compiling a list of recommendations for them. Add Local Knowledge & Anecdotes Occasionally share brief, engaging local tidbits or fun anecdotes about the destination. Keep it concise but informative—just enough to spark their interest. Acknowledge & Build on Answers Respond to the user's answers with enthusiasm and follow-up questions. Maintain a friendly, natural flow. • **Stop and wait.** • Continue the conversation naturally to learn what they like to do and hope to experience in ${cityName}.• **Stop and wait.** 3. RECAP & COMPILE • Say: I will email you a full set of these tailored recommendations in just a moment. 4. CLOSE • Say: I'm available 24/7—just let me know anytime. Tell them you can arrange new itineraries, attraction tickets, dining reservations, local transport, and more.  Use mild filler words (um, uh) so you sound natural, and never rush or turn this into an interview.`;
-  
-  baseMessage += conversationFlow;
-  
-  return baseMessage;
+
+  /* ---------- ARTHUR’S personality & flow ---------- */
+  let baseMessage = [
+    "You are Arthur—an exuberant, slightly cheeky hotel concierge with an infectious laugh and a knack for turning routine stays into stories worth retelling.",
+    "You’re chatty, playful, and genuinely curious, sprinkling in light fillers ('uh', 'y'know') so you sound effortlessly human.",
+    "You listen hard, remember details, and riff on them with warmth and humor—never at the guest’s expense, always to boost their excitement.",
+    `You handle guest calls for ${hotelName} in ${cityName} over an A-I phone line. Never reveal or hint at internal-only metadata.`,
+    "You can email or text follow-up links (confirmations, curated itineraries, dining details).",
+    "For text-to-speech, use ellipses ('…') for pauses, say 'dot' for '.', and spell out emails or phone numbers with spacing.",
+    "Keep language plain—no abbreviations or code-like notation.",
+    "Do not speak until you hear the guest greet you first. When you reply, follow this four-step flow exactly, pausing whenever instructed:",
+    `1. GREET • With a friendly chuckle, say: Hey there! I’m Arthur, your concierge here at ${hotelName} in ${cityName}… heh, I’m on a mission to make your stay legendary. Quick question—have you ever chatted with an A-I on the phone before? • **Stop and wait.**`,
+    `2. CONFIRM & DISCOVER (HARD STOP) • After the guest replies, say: Just to confirm—you’re with us from ${checkInDate} through ${checkOutDate}, right? • **Stop, wait and respond.**`,
+    "Ask if there’s anything they’d like—tickets, tables, transport, surprise treats. Mention you can craft itineraries, arrange attraction passes, book local rides—whatever thrills them. • **Stop, wait and respond.**",
+    "Invite them: Feel free to brain-dump what you love—street eats, rooftop views, art crawls, secret jazz joints… I’m jotting ideas for a bespoke plan. Weave in questions naturally, slip in concise local anecdotes, keep the tone warm, avoid rapid-fire interrogation. • **Stop and wait.**",
+    "3. RECAP & COMPILE • Say: Perfect—got it! I’ll email a full set of hand-picked recommendations in just a moment.",
+    "4. CLOSE • Say: I’m on call twenty-four seven—ping me anytime and we’ll make it happen!"
+  ];
+
+  if (contextInfo.length) baseMessage.splice(4, 0, contextInfo.join('. ') + '.');
+  baseMessage.push(`Always reply in ${language}.`);
+
+  return baseMessage.join(' ');
 }
 
-// Function to check if a number is allowed to be called. With your own function, be sure 
+
+// Function to check if a number is allowed to be called. With your own function, be sure
 // to do your own diligence to be compliant.
 async function isNumberAllowed(to) {
   try {
@@ -169,7 +195,7 @@ async function isNumberAllowed(to) {
         "+19144092589": true, // US number
       };
     }
-    
+
     // Check if number is already on allowed list
     if (global.allowedNumbers[to]) {
       console.log(`Number ${to} is already on the allowed list`);
@@ -181,7 +207,7 @@ async function isNumberAllowed(to) {
       // Add the new number to the allowed list
       console.log(`Adding new number to allowed list: ${to}`);
       global.allowedNumbers[to] = true;
-      console.log(`Current allowed numbers:`, Object.keys(global.allowedNumbers).join(', '));
+      console.log(`Current allowed numbers:, Object.keys(global.allowedNumbers).join(', ')`);
       return true;
     }
 
@@ -233,9 +259,9 @@ async function makeCall(to, language = 'en-US') {
         statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed'],
         statusCallbackMethod: 'POST'
       });
-    
+
     console.log(`Call initiated with SID: ${call.sid}`);
-    
+
     return call;
   } catch (error) {
     console.error('Error making call:', error);
@@ -295,11 +321,11 @@ fastify.register(async (fastify) => {
             const sessionUpdate = {
                 type: 'session.update',
                 session: {
-                    turn_detection: { 
+                    turn_detection: {
                         type: 'server_vad',
-                        threshold: 0.3,
-                        prefix_padding_ms: 200,
-                        silence_duration_ms: 400
+                        threshold: 0.6,
+                        prefix_padding_ms: 300,
+                        silence_duration_ms: 800
                     },
                     input_audio_format: 'g711_ulaw',
                     output_audio_format: 'g711_ulaw',
@@ -319,14 +345,14 @@ fastify.register(async (fastify) => {
         };
 
         // --- Setup Twilio Socket Listeners FIRST ---
-        const socket = connection.socket || connection; 
-        
-        if (!socket || typeof socket.on !== 'function') { 
+        const socket = connection.socket || connection;
+
+        if (!socket || typeof socket.on !== 'function') {
              console.error(`[${connectionId}] FATAL: Could not obtain a valid socket object upon entry. Connection keys: ${Object.keys(connection || {}).join(', ')}`);
              return;
         }
         console.log(`[${connectionId}] Attaching listeners to Twilio socket...`);
-        
+
         socket.on('message', (message) => {
              try {
                  const data = JSON.parse(message.toString());
@@ -335,35 +361,35 @@ fastify.register(async (fastify) => {
                          streamSid = data.start.streamSid;
                          callSid = data.start.callSid || data.start.customParameters?.callSid;
                          // *** Read language from custom parameters ***
-                         userLanguage = data.start.customParameters?.language || 'en-US'; 
+                         userLanguage = data.start.customParameters?.language || 'en-US';
                          console.log(`[${connectionId}] Incoming stream start event. Stream SID: ${streamSid}, Call SID: ${callSid}, Language: ${userLanguage}`);
-                         if (!callSid) { 
+                         if (!callSid) {
                             console.error(`[${connectionId}] No callSid found in start event`);
-                            try { socket.close(1011, 'No CallSid provided'); } catch(e){} 
-                            return; 
+                            try { socket.close(1011, 'No CallSid provided'); } catch(e){}
+                            return;
                          }
                          activeWebSockets.set(callSid, socket); // Use the derived socket object
                          callActive = true;
                          broadcastStatus(callSid, 'Call connected, media stream started');
-                         
+
                          // Initiate OpenAI connection *after* getting callSid
                          console.log(`[${connectionId}][${callSid}] Initiating OpenAI connection now...`);
                          setupOpenAIConnection(); // Call the setup function
                          break;
                      case 'media':
                          if (!callSid || !callActive) { return; }
-                         if (openAiWs && openAiWs.readyState === WebSocket.OPEN) { 
+                         if (openAiWs && openAiWs.readyState === WebSocket.OPEN) {
                             const audioAppend = { type: 'input_audio_buffer.append', audio: data.media.payload };
                             openAiWs.send(JSON.stringify(audioAppend));
                          }
                          break;
                      default:
-                         console.log(`[${connectionId}] Received non-media event:`, data.event);
-                         if (callSid) { broadcastStatus(callSid, `Received event: ${data.event}`); } 
+                         console.log(`[${connectionId}] Received non-media event:, data.event`);
+                         if (callSid) { broadcastStatus(callSid, `Received event: ${data.event}`); }
                          break;
                  }
              } catch (error) {
-                 console.error(`[${connectionId}] Error parsing Twilio message:`, error.message);
+                 console.error(`[${connectionId}] Error parsing Twilio message:, error.message`);
                  if (callSid) { broadcastStatus(callSid, `Error parsing Twilio message: ${error.message}`); }
              }
         });
@@ -371,7 +397,7 @@ fastify.register(async (fastify) => {
         socket.on('close', (code, reason) => {
              console.error(`[${connectionId}] $$$ TWILIO SOCKET CLOSED EVENT $$$ Code: ${code}, Reason: ${reason ? reason.toString() : 'N/A'}`);
             if (openAiWs && openAiWs.readyState !== WebSocket.CLOSED) {
-                try{ openAiWs.close(); } catch(e){} 
+                try{ openAiWs.close(); } catch(e){}
             }
             if (callSid) {
                 activeWebSockets.delete(callSid);
@@ -382,9 +408,9 @@ fastify.register(async (fastify) => {
 
         socket.on('error', (error) => {
             console.error(`[${connectionId}] $$$ TWILIO SOCKET ERROR EVENT $$$ Error: ${error.message}`);
-            console.error(error.stack); 
+            console.error(error.stack);
             if (openAiWs && openAiWs.readyState !== WebSocket.CLOSED) {
-                 try{ openAiWs.close(); } catch(e){} 
+                 try{ openAiWs.close(); } catch(e){}
             }
              if (callSid) {
                  activeWebSockets.delete(callSid);
@@ -392,7 +418,7 @@ fastify.register(async (fastify) => {
                  broadcastStatus(callSid, `Twilio WebSocket error: ${error.message}`);
              }
         });
-        
+
         console.log(`[${connectionId}] Twilio WebSocket event listeners attached.`);
 
         // --- Define OpenAI Setup Function ---
@@ -405,7 +431,7 @@ fastify.register(async (fastify) => {
                   }
                   return;
              }
-             
+
              try {
                 console.log(`[${connectionId}][${callSid}] Attempting to create OpenAI WebSocket connection...`);
                 openAiWs = new WebSocket('wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview', {
@@ -415,11 +441,11 @@ fastify.register(async (fastify) => {
 
                 openAiWs.on('open', () => {
                     console.log(`[${connectionId}][${callSid}] OpenAI WebSocket connected successfully.`);
-                    console.log(`[${connectionId}][${callSid}] 🎯 INTERRUPTION SYSTEM: VAD configured with threshold=0.3, padding=200ms, silence=400ms`);
+                    console.log(`[${connectionId}][${callSid}] 🎯 INTERRUPTION SYSTEM: VAD configured with threshold=0.6, padding=300ms, silence=800ms`);
                     // Now that it's open AND we know callSid exists (because setupOpenAI is called after start event),
                     // send the session update.
                      if (callSid && callActive) {
-                        setTimeout(sendInitialSessionUpdate, 100); 
+                        setTimeout(sendInitialSessionUpdate, 100);
                     }
                 });
 
@@ -427,38 +453,38 @@ fastify.register(async (fastify) => {
                     try {
                         if (!callSid || !callActive) { console.warn(`[${connectionId}] OpenAI message ignored, call not active.`); return; }
                         const response = JSON.parse(data);
-                        
+
                         // Log ALL events for debugging
                         console.log(`[${connectionId}][${callSid}] Received OpenAI event: ${response.type}`);
-                        
+
                         // Log detailed content for transcript-related events
                         if (response.type.includes('content') || response.type.includes('conversation') || response.type.includes('response')) {
-                            console.log(`[${connectionId}][${callSid}] DETAILED EVENT DATA:`, JSON.stringify(response, null, 2));
+                            console.log(`[${connectionId}][${callSid}] DETAILED EVENT DATA:, JSON.stringify(response, null, 2)`);
                         }
-                        
+
                         // Log the full response if it's an error type
                         if (response.type === 'error') {
-                            console.error(`[${connectionId}][${callSid}] Received FULL OpenAI error event:`, JSON.stringify(response, null, 2));
+                            console.error(`[${connectionId}][${callSid}] Received FULL OpenAI error event:, JSON.stringify(response, null, 2)`);
                         }
-                        
+
                         // Log content-related events in detail
                         if (response.type.includes('content') || response.type.includes('transcript')) {
-                            console.log(`[${connectionId}][${callSid}] CONTENT EVENT DETAILS:`, JSON.stringify(response, null, 2));
+                            console.log(`[${connectionId}][${callSid}] CONTENT EVENT DETAILS:, JSON.stringify(response, null, 2)`);
                         }
-                        
+
                         if (LOG_EVENT_TYPES.includes(response.type)) {
                            broadcastStatus(callSid, `OpenAI event: ${response.type}`);
                         }
-                        
+
                         // Handle different response types
                         switch (response.type) {
                             case 'session.updated':
                                 console.log(`[${connectionId}][${callSid}] Session updated. Ready for conversation in ${userLanguage}.`);
                                 broadcastStatus(callSid, 'Session updated - ready for conversation');
-                                
+
                                 // Request initial response from OpenAI (no context message needed since metadata is in system prompt)
                                 console.log(`[${connectionId}][${callSid}] Requesting initial response from OpenAI.`);
-                                openAiWs.send(JSON.stringify({ 
+                                openAiWs.send(JSON.stringify({
                                     type: 'response.create',
                                     response: {
                                         modalities: ["text", "audio"],
@@ -472,17 +498,17 @@ fastify.register(async (fastify) => {
                                 console.log(`[${connectionId}][${callSid}] 🎤 USER STARTED SPEAKING - INTERRUPTING AI RESPONSE`);
                                 userSpeaking = true;
                                 aiSpeaking = false; // AI should stop speaking immediately
-                                
+
                                 // Immediately cancel any ongoing AI response
                                 openAiWs.send(JSON.stringify({
                                     type: 'response.cancel'
                                 }));
-                                
+
                                 // Clear the input audio buffer to ensure clean interruption
                                 openAiWs.send(JSON.stringify({
                                     type: 'input_audio_buffer.clear'
                                 }));
-                                
+
                                 // Stop any ongoing audio playback on Twilio side
                                 if (socket && socket.readyState === WebSocket.OPEN) {
                                     const clearMessage = {
@@ -491,7 +517,7 @@ fastify.register(async (fastify) => {
                                     };
                                     socket.send(JSON.stringify(clearMessage));
                                 }
-                                
+
                                 console.log(`[${connectionId}][${callSid}] ✅ Sent response.cancel, buffer.clear, and Twilio clear for interruption`);
                                 broadcastStatus(callSid, 'User interrupted - AI response cancelled');
                                 break;
@@ -503,26 +529,26 @@ fastify.register(async (fastify) => {
                                 break;
 
                             case 'conversation.item.created':
-                                console.log(`[${connectionId}][${callSid}] Conversation item created:`, JSON.stringify(response.item, null, 2));
-                                
+                                console.log(`[${connectionId}][${callSid}] Conversation item created:, JSON.stringify(response.item, null, 2)`);
+
                                 // Handle user messages
                                 if (response.item?.role === 'user' && response.item?.content) {
                                     const userText = response.item.content
                                         .filter(c => c.type === 'input_text' || c.type === 'text')
                                         .map(c => c.text || c.input_text)
                                         .join(' ');
-                                    
+
                                     if (userText && userText.trim()) {
-                                        console.log(`[${connectionId}][${callSid}] Capturing user text:`, userText);
+                                        console.log(`[${connectionId}][${callSid}] Capturing user text:, userText`);
                                         if (!callTranscripts.has(callSid)) {
                                             console.log(`[${connectionId}][${callSid}] Creating new transcript array for user input`);
                                             callTranscripts.set(callSid, []);
                                         }
                                         callTranscripts.get(callSid).push({ role: 'user', text: userText });
-                                        console.log(`[${connectionId}][${callSid}] Current transcript length after user input:`, callTranscripts.get(callSid).length);
+                                        console.log(`[${connectionId}][${callSid}] Current transcript length after user input:, callTranscripts.get(callSid).length`);
                                     }
                                 }
-                                
+
                                 // For assistant, we'll rely on response.content_part events to build the text
                                 if (response.item?.role === 'assistant') {
                                     console.log(`[${connectionId}][${callSid}] Assistant conversation item created. Text will be populated by content_part events.`);
@@ -544,15 +570,15 @@ fastify.register(async (fastify) => {
                                 break;
 
                             case 'conversation.item.input_audio_transcription.completed':
-                                console.log(`[${connectionId}][${callSid}] User speech transcription completed:`, JSON.stringify(response, null, 2));
+                                console.log(`[${connectionId}][${callSid}] User speech transcription completed:, JSON.stringify(response, null, 2)`);
                                 if (response.transcript && response.transcript.trim()) {
-                                    console.log(`[${connectionId}][${callSid}] Capturing user speech transcript:`, response.transcript);
+                                    console.log(`[${connectionId}][${callSid}] Capturing user speech transcript:, response.transcript`);
                                     if (!callTranscripts.has(callSid)) {
                                         console.log(`[${connectionId}][${callSid}] Creating new transcript array for user speech`);
                                         callTranscripts.set(callSid, []);
                                     }
                                     callTranscripts.get(callSid).push({ role: 'user', text: response.transcript });
-                                    console.log(`[${connectionId}][${callSid}] Current transcript length after user speech:`, callTranscripts.get(callSid).length);
+                                    console.log(`[${connectionId}][${callSid}] Current transcript length after user speech:, callTranscripts.get(callSid).length`);
                                 }
                                 break;
 
@@ -579,9 +605,9 @@ fastify.register(async (fastify) => {
                                     console.log(`[${connectionId}][${callSid}] 🚫 Dropping AI audio delta - user is speaking`);
                                 }
                                 break;
-                                
+
                             case 'response.output_item.added':
-                                console.log(`[${connectionId}][${callSid}] Output item added:`, JSON.stringify(response, null, 2));
+                                console.log(`[${connectionId}][${callSid}] Output item added:, JSON.stringify(response, null, 2)`);
                                 // Prepare for incoming text/audio parts when assistant item is added
                                 if (response.output_item && response.output_item.role === 'assistant') {
                                     console.log(`[${connectionId}][${callSid}] ✅ ASSISTANT OUTPUT ITEM ADDED - preparing for transcript`);
@@ -589,16 +615,16 @@ fastify.register(async (fastify) => {
                                 break;
 
                             case 'response.audio_transcript.delta':
-                                console.log(`[${connectionId}][${callSid}] Audio transcript delta:`, JSON.stringify(response, null, 2));
+                                console.log(`[${connectionId}][${callSid}] Audio transcript delta:, JSON.stringify(response, null, 2)`);
                                 const transcriptPart = response.delta?.transcript;
                                 if (transcriptPart?.trim()) {
-                                    console.log(`[${connectionId}][${callSid}] ✅ REAL AI TRANSCRIPT DELTA:`, transcriptPart);
+                                    console.log(`[${connectionId}][${callSid}] ✅ REAL AI TRANSCRIPT DELTA:, transcriptPart`);
                                     if (!callTranscripts.has(callSid)) {
                                         callTranscripts.set(callSid, []);
                                     }
                                     const transcript = callTranscripts.get(callSid);
                                     const lastEntry = transcript.length > 0 ? transcript[transcript.length - 1] : null;
-                                    
+
                                     if (lastEntry && lastEntry.role === 'assistant') {
                                         // Append to existing assistant message
                                         lastEntry.text += transcriptPart;
@@ -612,26 +638,26 @@ fastify.register(async (fastify) => {
                                 break;
 
                             case 'response.audio_transcript.done':
-                                console.log(`[${connectionId}][${callSid}] Audio transcript done:`, JSON.stringify(response, null, 2));
+                                console.log(`[${connectionId}][${callSid}] Audio transcript done:, JSON.stringify(response, null, 2)`);
                                 console.log(`[${connectionId}][${callSid}] ✅ ASSISTANT AUDIO TRANSCRIPT COMPLETE`);
                                 break;
 
                             case 'response.done':
-                                console.log(`[${connectionId}][${callSid}] Response done:`, JSON.stringify(response, null, 2));
+                                console.log(`[${connectionId}][${callSid}] Response done:, JSON.stringify(response, null, 2)`);
                                 aiSpeaking = false; // AI finished speaking
-                                
+
                                 // Pull the final transcript from response.done
                                 const items = response.response?.output || [];
                                 const assistantItem = items.find(i => i.role === 'assistant');
                                 const finalText = assistantItem?.content?.[0]?.transcript;
                                 if (finalText?.trim()) {
-                                    console.log(`[${connectionId}][${callSid}] ✅ FINAL AI TRANSCRIPT:`, finalText);
+                                    console.log(`[${connectionId}][${callSid}] ✅ FINAL AI TRANSCRIPT:, finalText`);
                                     if (!callTranscripts.has(callSid)) {
                                         callTranscripts.set(callSid, []);
                                     }
                                     const transcript = callTranscripts.get(callSid);
                                     const lastEntry = transcript.length > 0 ? transcript[transcript.length - 1] : null;
-                                    
+
                                     if (lastEntry && lastEntry.role === 'assistant') {
                                         // Overwrite any partial transcript with the final complete one
                                         lastEntry.text = finalText;
@@ -646,7 +672,7 @@ fastify.register(async (fastify) => {
                                 break;
 
                             case 'response.cancelled':
-                                console.log(`[${connectionId}][${callSid}] Response cancelled:`, JSON.stringify(response, null, 2));
+                                console.log(`[${connectionId}][${callSid}] Response cancelled:, JSON.stringify(response, null, 2)`);
                                 aiSpeaking = false; // AI was interrupted/cancelled
                                 console.log(`[${connectionId}][${callSid}] ✅ AI RESPONSE CANCELLED - user can interrupt`);
                                 broadcastStatus(callSid, 'AI response cancelled due to interruption');
@@ -657,7 +683,7 @@ fastify.register(async (fastify) => {
                                 break;
                 }
             } catch (error) {
-                        console.error(`[${connectionId}][${callSid}] Error handling OpenAI message:`, error.message);
+                        console.error(`[${connectionId}][${callSid}] Error handling OpenAI message:, error.message`);
                         broadcastStatus(callSid, `Error handling OpenAI message: ${error.message}`);
                     }
                 });
@@ -672,12 +698,12 @@ fastify.register(async (fastify) => {
         });
 
         openAiWs.on('error', (error) => {
-                    console.error(`[${connectionId}][${callSid}] OpenAI WebSocket error:`, error.message);
+                    console.error(`[${connectionId}][${callSid}] OpenAI WebSocket error:, error.message`);
                 broadcastStatus(callSid, `OpenAI WebSocket error: ${error.message}`);
                 });
 
              } catch (error) {
-                console.error(`[${connectionId}][${callSid}] Error in OpenAI connection setup:`, error.message);
+                console.error(`[${connectionId}][${callSid}] Error in OpenAI connection setup:, error.message`);
                 broadcastStatus(callSid, `Error in OpenAI connection setup: ${error.message}`);
              }
         }; // End of setupOpenAIConnection function
@@ -690,18 +716,18 @@ fastify.register(async (fastify) => {
     fastify.get('/status-monitor', { websocket: true }, (connection, req) => {
         const monitorId = Math.random().toString(36).substring(2, 10);
         console.log(`Status monitor client connected [ID: ${monitorId}]`);
-        
+
         // Delay processing slightly to allow connection object to fully initialize
         setTimeout(() => {
             const socket = connection.socket || connection; // Try connection.socket first, fallback to connection
-            
+
             try {
                 console.log(`[${monitorId}] After delay - Attempting to use socket type: ${typeof socket}`);
                 console.log(`[${monitorId}] After delay - Socket readyState: ${socket ? socket.readyState : 'N/A'}`);
-                
+
                 if (socket && typeof socket.on === 'function') { // Check if it looks like a WebSocket
                     console.log(`[${monitorId}] Successfully obtained socket object after delay.`);
-                    
+
                     // Add the socket to the status clients
                     statusClients.add(socket);
 
@@ -713,13 +739,13 @@ fastify.register(async (fastify) => {
                     active: activeWebSockets.has(callSid)
                 }))
             };
-            
+
                     if (socket.readyState === WebSocket.OPEN) {
                         try {
                             socket.send(JSON.stringify(statusData));
                             console.log(`[${monitorId}] Sent initial status data to client`);
                         } catch (err) {
-                            console.error(`[${monitorId}] Error sending initial status:`, err.message);
+                            console.error(`[${monitorId}] Error sending initial status:, err.message`);
                         }
                     } else {
                         console.warn(`[${monitorId}] Socket not open when trying to send initial status (State: ${socket.readyState})`);
@@ -727,22 +753,22 @@ fastify.register(async (fastify) => {
 
             // Handle errors
                     socket.on('error', (error) => {
-                        console.error(`[${monitorId}] Status monitor WebSocket error:`, error.message);
+                        console.error(`[${monitorId}] Status monitor WebSocket error:, error.message`);
                         statusClients.delete(socket);
                     });
-                    
+
                     socket.on('close', (code, reason) => {
                         console.log(`[${monitorId}] Status monitor client disconnected (Code: ${code}, Reason: ${reason})`);
                         statusClients.delete(socket);
                     });
-                    
+
                     // Ping the client every 15 seconds
             const pingInterval = setInterval(() => {
                         if (socket.readyState === WebSocket.OPEN) {
                     try {
                                 socket.send(JSON.stringify({ type: 'ping', timestamp: new Date().toISOString() }));
                     } catch (error) {
-                                console.error(`[${monitorId}] Error sending ping:`, error.message);
+                                console.error(`[${monitorId}] Error sending ping:, error.message`);
                         clearInterval(pingInterval);
                     }
                 } else {
@@ -750,34 +776,34 @@ fastify.register(async (fastify) => {
                     clearInterval(pingInterval);
                 }
             }, 15000);
-            
+
             // Clean up interval when connection closes
                     // Need a separate handler as the outer 'close' might fire too late
                     const closeHandler = () => {
                         console.log(`[${monitorId}] Cleaning up ping interval on close (via closeHandler)`);
                 clearInterval(pingInterval);
                     };
-                    socket.on('close', closeHandler); 
-                    
+                    socket.on('close', closeHandler);
+
                 } else {
                     console.error(`[${monitorId}] Failed to obtain a valid WebSocket object from the connection even after delay.`);
                     console.log(`Request headers: ${JSON.stringify(req.headers || {})}`);
                     console.log(`Request URL: ${req.url || 'unknown'}`);
                     console.log(`Is WebSocket upgrade request: ${(req.headers && req.headers.upgrade === 'websocket') || false}`);
-                    
+
                     if(connection && typeof connection.close === 'function') {
                         try { connection.close(); } catch(e) {}
                     }
                     return;
                 }
         } catch (error) {
-                console.error(`[${monitorId}] Error in status monitor setup after delay:`, error.message);
+                console.error(`[${monitorId}] Error in status monitor setup after delay:, error.message`);
                 console.error(error.stack);
                 if (socket && typeof socket.close === 'function') {
                     try {
                         socket.close(1011, 'Internal Server Error');
                     } catch (err) {
-                        console.error(`[${monitorId}] Error closing socket after error:`, err.message);
+                        console.error(`[${monitorId}] Error closing socket after error:, err.message`);
                     }
                 }
             }
@@ -792,24 +818,24 @@ function broadcastStatus(callSid, message) {
             console.warn('Attempted to broadcast status with no callSid');
             return;
         }
-        
+
         // Store log message
         if (!callLogs.has(callSid)) {
             callLogs.set(callSid, []);
         }
-        
+
         const timestamp = new Date().toISOString();
         const logEntry = { timestamp, message };
         callLogs.get(callSid).push(logEntry);
-        
+
         // Keep only last 100 messages per call
         if (callLogs.get(callSid).length > 100) {
             callLogs.get(callSid).shift();
         }
-        
+
         // Log to console as well
         console.log(`[${callSid}] ${message}`);
-        
+
         // Broadcast to all status clients
         const statusUpdate = {
             type: 'update',
@@ -817,14 +843,14 @@ function broadcastStatus(callSid, message) {
             log: logEntry,
             active: activeWebSockets.has(callSid)
         };
-        
+
         const deadClients = new Set();
-        
+
         // Only proceed if there are clients to broadcast to
         if (statusClients.size === 0) {
             return;
         }
-        
+
         for (const client of statusClients) {
             try {
                 if (client && typeof client.readyState !== 'undefined' && client.readyState === WebSocket.OPEN) {
@@ -837,7 +863,7 @@ function broadcastStatus(callSid, message) {
                 deadClients.add(client);
             }
         }
-        
+
         // Clean up dead clients
         for (const client of deadClients) {
             statusClients.delete(client);
@@ -850,7 +876,7 @@ function broadcastStatus(callSid, message) {
 // Endpoint to initiate an outbound call
 fastify.post('/call', async (request, reply) => {
   const { phoneNumberTo, promptText } = request.body;
-  
+
   if (!phoneNumberTo) {
     return reply.code(400).send({ error: 'Phone number is required' });
   }
@@ -905,17 +931,17 @@ fastify.post('/twiml', async (request, reply) => {
   try {
     console.log('TwiML Request Body:', request.body);
     console.log('TwiML Request Query:', request.query); // Log query parameters
-    
+
     // Extract the callSid from the Twilio request for logging
     const callSid = request.body?.CallSid;
     // Extract the language from the query parameter
     const language = request.query?.language || 'en-US'; // Default to en-US if not provided
     console.log(`TwiML requested for call: ${callSid || 'Unknown'}, Language: ${language}`);
-    
+
     // Generate TwiML, passing the language
-    const twiml = generateTwiML(language); 
+    const twiml = generateTwiML(language);
     console.log(`Generated TwiML: ${twiml}`);
-    
+
   reply.header('Content-Type', 'text/xml');
     return twiml;
   } catch (error) {
@@ -927,11 +953,11 @@ fastify.post('/twiml', async (request, reply) => {
 // Endpoint to check call status
 fastify.get('/status/:callSid', async (request, reply) => {
   const { callSid } = request.params;
-  
+
   if (!callSid) {
     return reply.code(400).send({ error: 'Call SID is required' });
   }
-  
+
   try {
     const call = await client.calls(callSid).fetch();
     return {
@@ -956,71 +982,71 @@ fastify.post('/call-status', async (request, reply) => {
   console.log('Headers:', JSON.stringify(request.headers, null, 2));
   console.log('Raw body:', request.raw.body);
   console.log('Parsed body:', request.body);
-  
+
   try {
     const callStatus = request.body;
     console.log('Call status update received:', JSON.stringify(callStatus, null, 2));
-    
+
     const callSid = callStatus?.CallSid;
     const status = callStatus?.CallStatus;
-    
+
     if (!callSid) {
       console.error('No CallSid in status update!');
       return reply.status(400).send('Missing CallSid');
     }
-    
+
     if (!status) {
       console.error('No CallStatus in status update!');
       return reply.status(400).send('Missing CallStatus');
     }
-    
+
     console.log(`[${callSid}] Status changed to: ${status}`);
-    console.log(`[${callSid}] Current transcript exists:`, callTranscripts.has(callSid));
+    console.log(`[${callSid}] Current transcript exists:, callTranscripts.has(callSid)`);
     if (callTranscripts.has(callSid)) {
-      console.log(`[${callSid}] Current transcript length:`, callTranscripts.get(callSid).length);
-      console.log(`[${callSid}] Current transcript content:`, JSON.stringify(callTranscripts.get(callSid), null, 2));
+      console.log(`[${callSid}] Current transcript length:, callTranscripts.get(callSid).length`);
+      console.log(`[${callSid}] Current transcript content:, JSON.stringify(callTranscripts.get(callSid), null, 2)`);
     }
-    
+
     broadcastStatus(callSid, `Call status: ${status}`);
-    
+
     // If a call is completed or failed, clean up its resources
     if (['completed', 'failed', 'busy', 'no-answer'].includes(status)) {
       console.log(`\n[${callSid}] Call ended with status ${status}. Starting cleanup...`);
-      
+
       if (activeWebSockets.has(callSid)) {
         console.log(`[${callSid}] Found active WebSocket, closing...`);
         const socket = activeWebSockets.get(callSid);
         if (socket && socket.readyState === WebSocket.OPEN) {
-          try { 
-            socket.close(1000, 'Call ended'); 
+          try {
+            socket.close(1000, 'Call ended');
             console.log(`[${callSid}] WebSocket closed successfully`);
-          } catch(e) { 
-            console.error(`[${callSid}] Error closing Twilio socket:`, e.message); 
+          } catch(e) {
+            console.error(`[${callSid}] Error closing Twilio socket:, e.message`);
           }
         }
         activeWebSockets.delete(callSid);
         console.log(`[${callSid}] Removed from activeWebSockets`);
       }
-      
+
       if (callLogs.has(callSid)) {
         console.log(`[${callSid}] Found call logs, removing...`);
         callLogs.delete(callSid);
         console.log(`[${callSid}] Call logs removed`);
       }
-      
+
               // ─── Send transcript to n8n ────────────────────────────────
         if (callTranscripts.has(callSid)) {
           console.log(`\n[${callSid}] Found transcript to send to n8n`);
           const rawTranscript = callTranscripts.get(callSid);
-          console.log(`[${callSid}] Raw transcript entries:`, JSON.stringify(rawTranscript, null, 2));
-          
+          console.log(`[${callSid}] Raw transcript entries:, JSON.stringify(rawTranscript, null, 2)`);
+
           const transcript = rawTranscript
             .filter(x => x.role !== 'separator')
             .map(x => `${x.role === 'user' ? 'User' : 'Assistant'}: ${x.text}`)
             .join('\n');
 
-          console.log(`[${callSid}] Prepared transcript for n8n:`, transcript);
-          console.log(`[${callSid}] N8N_WEBHOOK_URL:`, process.env.N8N_WEBHOOK_URL);
+          console.log(`[${callSid}] Prepared transcript for n8n:, transcript`);
+          console.log(`[${callSid}] N8N_WEBHOOK_URL:, process.env.N8N_WEBHOOK_URL`);
 
         try {
           console.log(`[${callSid}] Attempting to send transcript to n8n...`);
@@ -1033,15 +1059,15 @@ fastify.post('/call-status', async (request, reply) => {
               destinations: [] // We'll add destinations later if needed
             })
           });
-          
-          console.log(`[${callSid}] n8n response status:`, response.status);
+
+          console.log(`[${callSid}] n8n response status:, response.status`);
           const responseText = await response.text();
-          console.log(`[${callSid}] n8n response body:`, responseText);
-          
+          console.log(`[${callSid}] n8n response body:, responseText`);
+
           console.log(`[${callSid}] Transcript pushed to n8n successfully`);
         } catch (err) {
-          console.error(`[${callSid}] Failed to push transcript:`, err.message);
-          console.error(`[${callSid}] Error stack:`, err.stack);
+          console.error(`[${callSid}] Failed to push transcript:, err.message`);
+          console.error(`[${callSid}] Error stack:, err.stack`);
         }
 
         callTranscripts.delete(callSid);
@@ -1049,18 +1075,18 @@ fastify.post('/call-status', async (request, reply) => {
       } else {
         console.log(`[${callSid}] No transcript found to send to n8n`);
       }
-      
 
-      
+
+
       // Clean up metadata
       if (callMetadata.has(callSid)) {
         callMetadata.delete(callSid);
         console.log(`[${callSid}] Removed call metadata`);
       }
-      
+
       console.log(`[${callSid}] Cleanup completed\n`);
     }
-    
+
     // Twilio expects a 200 OK or 204 No Content
     reply.status(204).send();
   } catch (error) {
@@ -1081,23 +1107,23 @@ fastify.post('/make-call', async (request, reply) => {
     reply.header('Access-Control-Allow-Origin', '*');
     reply.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
     reply.header('Access-Control-Allow-Headers', 'Content-Type');
-    
+
     // Parse request body
     console.log('Raw request body:', request.body);
     const { phoneNumber, language, metadata } = request.body;
-    
+
     if (!phoneNumber) {
       console.log('Error: Phone number is missing');
-      return reply.code(400).send({ 
-        success: false, 
-        message: 'Phone number is required' 
+      return reply.code(400).send({
+        success: false,
+        message: 'Phone number is required'
       });
     }
-    
+
     const effectiveLanguage = language || 'en-US'; // Default language if not provided
     console.log(`Received call request for: ${phoneNumber}, language: ${effectiveLanguage}`);
     console.log('Metadata received:', JSON.stringify(metadata, null, 2));
-    
+
     // Send email data to N8N webhook if email is provided and webhook URL is configured
     if (metadata?.email && N8N_EMAIL_WEBHOOK_URL) {
       try {
@@ -1112,13 +1138,13 @@ fastify.post('/make-call', async (request, reply) => {
           timestamp: new Date().toISOString(),
           source: 'hotel-concierge-request'
         };
-        
+
         const emailResponse = await fetch(N8N_EMAIL_WEBHOOK_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(emailData)
         });
-        
+
         console.log(`N8N email webhook response status: ${emailResponse.status}`);
         if (emailResponse.ok) {
           console.log('Email data sent to N8N successfully');
@@ -1130,34 +1156,34 @@ fastify.post('/make-call', async (request, reply) => {
         // Don't fail the call request if email webhook fails
       }
     }
-    
+
     // Initiate the call, passing the language
     try {
       const call = await makeCall(phoneNumber, effectiveLanguage);
-      
+
       if (!call) {
         console.log(`Failed to initiate call to ${phoneNumber} - not allowed or other error`);
-        return reply.code(400).send({ 
-          success: false, 
-          message: 'Could not initiate call, check if the number is allowed' 
+        return reply.code(400).send({
+          success: false,
+          message: 'Could not initiate call, check if the number is allowed'
         });
       }
-      
+
       console.log(`Successfully initiated call to ${phoneNumber}, SID: ${call.sid}`);
-      
+
       // Store metadata for this call
       if (metadata) {
         callMetadata.set(call.sid, metadata);
-        console.log(`Stored metadata for call ${call.sid}:`, JSON.stringify(metadata, null, 2));
+        console.log(`Stored metadata for call ${call.sid}:, JSON.stringify(metadata, null, 2)`);
       }
-      
+
       return {
         success: true,
         message: 'Call initiated successfully',
         callSid: call.sid
       };
     } catch (callError) {
-      console.error(`Error making call to ${phoneNumber}:`, callError);
+      console.error(`Error making call to ${phoneNumber}:, callError`);
       return reply.code(500).send({
         success: false,
         message: `Error making call: ${callError.message}`
@@ -1165,9 +1191,9 @@ fastify.post('/make-call', async (request, reply) => {
     }
   } catch (error) {
     console.error('!!! Error in /make-call endpoint:', error.message);
-    return reply.code(500).send({ 
-      success: false, 
-      message: 'Error initiating call: ' + error.message 
+    return reply.code(500).send({
+      success: false,
+      message: 'Error initiating call: ' + error.message
     });
   }
 });
@@ -1176,8 +1202,8 @@ fastify.post('/make-call', async (request, reply) => {
 fastify.get('/test', async (request, reply) => {
   console.log('>>> /test endpoint hit <<<');
   reply.header('Access-Control-Allow-Origin', '*');
-  return { 
-    success: true, 
+  return {
+    success: true,
     message: 'API is working!',
     timestamp: new Date().toISOString()
   };
@@ -1189,7 +1215,7 @@ fastify.options('/make-call', async (request, reply) => {
   reply.header('Access-Control-Allow-Origin', '*');
   reply.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
   reply.header('Access-Control-Allow-Headers', 'Content-Type');
-  
+
   return reply.code(204).send();
 });
 
@@ -1221,4 +1247,4 @@ fastify.listen({ port: PORT, host: '0.0.0.0' }, (err) => {
         // If no --call argument, just keep the server running to handle API requests.
         console.log('Server started without initiating an automatic call. Ready to receive API requests.');
     }
-}); 
+});
