@@ -1,2 +1,9 @@
 # Local Netlify folder
 .netlify
+
+# Cleanup items
+node_modules/
+*.log
+.DS_Store
+audio_samples/
+*.bak
