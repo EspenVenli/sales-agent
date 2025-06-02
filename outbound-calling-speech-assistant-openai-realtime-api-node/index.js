@@ -28,8 +28,8 @@ const {
   N8N_EMAIL_WEBHOOK_URL,
 } = process.env;
 
-// Constants
-const DOMAIN = rawDomain.replace(/(^\w+:|^)\/\//, '').replace(/\/+$/, ''); // Clean protocols and slashes
+// Constants with proper fallbacks
+const DOMAIN = rawDomain ? rawDomain.replace(/(^\w+:|^)\/\//, '').replace(/\/+$/, '') : 'sales-agent-76jb.onrender.com'; // Clean protocols and slashes or use default
 // const SYSTEM_MESSAGE = "You are Felix, ..."; // Old SYSTEM_MESSAGE removed as it's replaced by the dynamic buildSystemMessage
 const VOICE = 'ballad'; // Options include: alloy, ash, ballad, coral, echo, sage, shimmer, and verse
 const PORT = process.env.PORT || 6060; // Allow dynamic port assignment
@@ -56,10 +56,18 @@ const LOG_EVENT_TYPES = [
     'response.content_part.done',
     'response.cancelled'
 ];
-if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !PHONE_NUMBER_FROM || !rawDomain || !OPENAI_API_KEY) {
-  console.error('One or more environment variables are missing. Please ensure TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, PHONE_NUMBER_FROM, DOMAIN, and OPENAI_API_KEY are set.');
+if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !PHONE_NUMBER_FROM || !OPENAI_API_KEY) {
+  console.error('Missing required environment variables. Please ensure TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, PHONE_NUMBER_FROM, and OPENAI_API_KEY are set.');
+  console.log('DOMAIN will default to: sales-agent-76jb.onrender.com if not provided');
   process.exit(1);
 }
+
+// Log configuration
+console.log('🚀 Felix AI Demo System Starting...');
+console.log(`📍 Domain: ${DOMAIN}`);
+console.log(`📞 Twilio Phone: ${PHONE_NUMBER_FROM}`);
+console.log(`🤖 OpenAI API: ${OPENAI_API_KEY ? 'Configured' : 'Missing'}`);
+console.log(`🔗 N8N Webhook: ${N8N_WEBHOOK_URL ? 'Configured' : 'Not configured'}`);
 
 // Initialize Twilio client
 const client = twilio(
@@ -228,16 +236,16 @@ async function makeCall(phoneNumber, metadata = {}) {
     const call = await client.calls.create({
       url: `https://sales-agent-76jb.onrender.com/webhook/call`,
       to: phoneNumber,
-      from: process.env.TWILIO_PHONE_NUMBER
+      from: PHONE_NUMBER_FROM
     });
     
     console.log(`✨ Felix demo call created with SID: ${call.sid}`);
     
     // Store metadata for this call
-    callMetadata[call.sid] = {
+    callMetadata.set(call.sid, {
       ...metadata,
       timestamp: new Date().toISOString()
-    };
+    });
     
     return call.sid;
   } catch (error) {
