@@ -537,16 +537,9 @@ fastify.register(async (fastify) => {
                                 console.log(`[${connectionId}][${callSid}] Session updated. Ready for conversation in ${userLanguage}.`);
                                 broadcastStatus(callSid, 'Session updated - ready for conversation');
 
-                                // Request initial response from OpenAI (no context message needed since metadata is in system prompt)
-                                console.log(`[${connectionId}][${callSid}] Requesting initial response from OpenAI.`);
-                                openAiWs.send(JSON.stringify({
-                                    type: 'response.create',
-                                    response: {
-                                        modalities: ["text", "audio"],
-                                        instructions: "Always provide both text and audio responses. Include the text version of everything you say."
-                                    }
-                                }));
-                                broadcastStatus(callSid, 'Requested initial response');
+                                // Do not request initial response - Felix should wait for user to speak first
+                                console.log(`[${connectionId}][${callSid}] Session ready. Felix will wait for user to speak first.`);
+                                broadcastStatus(callSid, 'Felix waiting for user to speak first');
                                 break;
 
                             case 'input_audio_buffer.speech_started':
