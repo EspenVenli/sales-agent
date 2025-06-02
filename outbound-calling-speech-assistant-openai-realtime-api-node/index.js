@@ -175,7 +175,7 @@ async function isNumberAllowed(to) {
     // Create allowed numbers list if it doesn't exist yet (for persistence across calls)
     if (!global.allowedNumbers) {
       global.allowedNumbers = {
-      "+18064251145": true, // Your Twilio number
+      "+4552516958": true, // Your new Twilio number (Denmark)
         "+4531219652": true,  // Danish number
         "+19472176285": true, // US number
         "+17864874788": true, // US number
