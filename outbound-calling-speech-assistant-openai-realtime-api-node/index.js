@@ -127,7 +127,7 @@ function buildSystemMessage(metadata = {}) {
     
     const contactContext = company ? 
         `You're calling ${firstName} who works at ${company}${jobTitle ? ` as a ${jobTitle}` : ''}${industry ? ` in the ${industry} industry` : ''}.` :
-        `You represent FelixOS, which is the AI operating system built for modern hospitality.`;
+        `You represent FelixOS.`;
     
     const notesContext = additionalNotes ? 
         `Additional context: ${additionalNotes}` : '';
@@ -376,7 +376,6 @@ fastify.register(async (fastify) => {
                 }
             };
             openAiWs.send(JSON.stringify(sessionUpdate));
-            console.log(`[${connectionId}][${callSid}] AI will wait for user's first utterance before responding.`);
             broadcastStatus(callSid, 'Sending session update to OpenAI');
         };
 
