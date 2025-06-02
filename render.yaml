@@ -1,18 +1,18 @@
 services:
   - type: web
-    name: phone-agent
+    name: sales-agent
     env: node
     region: oregon
     plan: free
     buildCommand: npm install
-    startCommand: node index.js
+    startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
         value: 6060
       - key: DOMAIN
-        value: hotelagent.onrender.com
+        value: sales-agent-76jb.onrender.com
       - key: TWILIO_ACCOUNT_SID
         sync: false
       - key: TWILIO_AUTH_TOKEN
