@@ -359,10 +359,7 @@
                 const data = Object.fromEntries(formData.entries());
                 
                 try {
-                    // For local testing - switch to localhost
-                    const response = await fetch('http://localhost:6060/api/call', {
-                    // For production - use this instead:
-                    // const response = await fetch('https://sales-agent-76jb.onrender.com/api/call', {
+                    const response = await fetch('https://sales-agent-76jb.onrender.com/api/call', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -431,10 +428,7 @@
                 statusCallDetails.style.display = 'none';
                 
                 try {
-                    // For local testing - switch to localhost
-                    const response = await fetch(`http://localhost:6060/api/call/status/${callSid}`);
-                    // For production - use this instead:
-                    // const response = await fetch(`https://sales-agent-76jb.onrender.com/api/call/status/${callSid}`);
+                    const response = await fetch(`https://sales-agent-76jb.onrender.com/api/call/status/${callSid}`);
                     const result = await response.json();
                     
                     if (response.ok) {
