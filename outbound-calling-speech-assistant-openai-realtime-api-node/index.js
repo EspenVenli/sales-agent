@@ -533,16 +533,12 @@ fastify.register(async (fastify) => {
                                 console.log(`[${connectionId}][${callSid}] Session updated. Ready for conversation in ${userLanguage}.`);
                                 broadcastStatus(callSid, 'Session updated - ready for conversation');
 
-                                // Request initial response from OpenAI (no context message needed since metadata is in system prompt)
-                                console.log(`[${connectionId}][${callSid}] Requesting initial response from OpenAI.`);
-                                openAiWs.send(JSON.stringify({
-                                    type: 'response.create',
-                                    response: {
-                                        modalities: ["text", "audio"],
-                                        instructions: "Always provide both text and audio responses. Include the text version of everything you say."
-                                    }
-                                }));
-                                broadcastStatus(callSid, 'Requested initial response');
+                                // DO NOT send response.create here.
+                                // The AI should wait for the user's first utterance or VAD timeout.
+                                // The system prompt "Do not speak until you hear them greet you first" will guide the AI.
+                                // The `response.create` in the 'input_audio_buffer.committed' handler will trigger
+                                // the AI's first response after the user speaks or is silent for the VAD duration.
+                                console.log(`[${connectionId}][${callSid}] AI will wait for user's first utterance before responding.`);
                                 break;
 
                             case 'input_audio_buffer.speech_started':
