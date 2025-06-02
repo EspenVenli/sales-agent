@@ -913,37 +913,61 @@ function generateTwiML(language) {
 // Generate TwiML for the call (Reads language from query)
 fastify.post('/webhook/call', async (request, reply) => {
   console.log('📞 Incoming webhook for Felix demo call');
+  console.log('Request headers:', JSON.stringify(request.headers, null, 2));
+  console.log('Request body:', JSON.stringify(request.body, null, 2));
   
   try {
     const callSid = request.body?.CallSid;
     console.log(`🎯 Call SID: ${callSid}`);
+    console.log(`🌐 Using domain: ${DOMAIN}`);
+    console.log(`📱 Phone number from: ${PHONE_NUMBER_FROM}`);
+    console.log(`🤖 OpenAI API key configured: ${!!OPENAI_API_KEY}`);
+    
+    if (!callSid) {
+      console.error('❌ No CallSid provided in webhook');
+      return reply.status(400).header('Content-Type', 'text/xml').send(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say>Call configuration error. Please contact support.</Say>
+</Response>`);
+    }
     
     // Get metadata for this call
     const metadata = callMetadata.get(callSid) || {};
-    console.log(`📋 Call metadata for ${callSid}:`, metadata);
+    console.log(`📋 Call metadata for ${callSid}:`, JSON.stringify(metadata, null, 2));
     
     // Update call status
     if (callDatabase[callSid]) {
         callDatabase[callSid].status = 'in-progress';
         callDatabase[callSid].startTime = new Date().toISOString();
+        console.log(`✅ Updated call status for ${callSid}`);
+    } else {
+        console.log(`⚠️ No call data found for ${callSid} in callDatabase`);
     }
     
-    // Generate TwiML to connect to media stream
+    // Generate TwiML to connect to media stream using dynamic domain
+    const streamUrl = `wss://${DOMAIN}/media-stream`;
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Connect>
-    <Stream url="wss://sales-agent-76jb.onrender.com/media-stream" track="both">
+    <Stream url="${streamUrl}" track="both">
+      <Parameter name="callSid" value="${callSid}"/>
+      <Parameter name="language" value="en-US"/>
     </Stream>
   </Connect>
 </Response>`;
     
-    console.log(`Generated TwiML for Felix: ${twiml}`);
+    console.log(`Generated TwiML for Felix with stream URL: ${streamUrl}`);
+    console.log(`Full TwiML: ${twiml}`);
     
     reply.header('Content-Type', 'text/xml');
     return twiml;
   } catch (error) {
     console.error('❌ Error in webhook/call endpoint:', error);
-    reply.status(500).send('Error generating TwiML');
+    console.error('Error stack:', error.stack);
+    return reply.status(500).header('Content-Type', 'text/xml').send(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say>Sorry, there was an error with the call. Please try again later.</Say>
+</Response>`);
   }
 });
 
