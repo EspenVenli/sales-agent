@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Calling Dashboard</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f7fa;
+            color: #333;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 10px;
+        }
+        .status {
+            background-color: #ecf0f1;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+        .status.connected {
+            background-color: #d1f5d3;
+        }
+        .status.disconnected {
+            background-color: #f5d3d3;
+        }
+        .call-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .call-card {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 15px;
+            width: calc(50% - 20px);
+            box-sizing: border-box;
+        }
+        .call-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        .call-sid {
+            font-size: 1.1em;
+            font-weight: bold;
+            color: #3498db;
+        }
+        .call-status {
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.9em;
+        }
+        .call-status.active {
+            background-color: #2ecc71;
+            color: white;
+        }
+        .call-status.ended {
+            background-color: #95a5a6;
+            color: white;
+        }
+        .log-container {
+            max-height: 300px;
+            overflow-y: auto;
+            background-color: #f9f9f9;
+            border: 1px solid #eee;
+            border-radius: 4px;
+            padding: 10px;
+        }
+        .log-entry {
+            padding: 5px 0;
+            border-bottom: 1px solid #eee;
+            font-size: 0.9em;
+        }
+        .log-time {
+            color: #7f8c8d;
+            font-size: 0.8em;
+            margin-right: 8px;
+        }
+        .log-message {
+            color: #2c3e50;
+        }
+        .log-message.ai-message {
+            color: #3498db;
+            font-weight: bold;
+        }
+        .log-message.error {
+            color: #e74c3c;
+        }
+        @media (max-width: 768px) {
+            .call-card {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>AI Calling Dashboard</h1>
+        
+        <div id="connection-status" class="status disconnected">
+            Connecting to server...
+        </div>
+        
+        <div class="call-container" id="calls">
+            <!-- Call cards will be added here dynamically -->
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const statusEl = document.getElementById('connection-status');
+            const callsContainer = document.getElementById('calls');
+            const calls = new Map();
+            
+            let socket = null;
+            let reconnectAttempts = 0;
+            const maxReconnectAttempts = 5;
+            
+            function connectWebSocket() {
+                // Get the current hostname and protocol (works with both http and https)
+                const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const wsUrl = `${protocol}//${location.host}/status-monitor`;
+                
+                statusEl.textContent = 'Connecting to server...';
+                statusEl.classList.remove('connected');
+                statusEl.classList.add('disconnected');
+                
+                // Connect to the WebSocket
+                socket = new WebSocket(wsUrl);
+                
+                socket.onopen = function() {
+                    console.log('WebSocket connected');
+                    reconnectAttempts = 0;
+                    statusEl.textContent = 'Connected to server';
+                    statusEl.classList.remove('disconnected');
+                    statusEl.classList.add('connected');
+                };
+                
+                socket.onclose = function(event) {
+                    console.log('WebSocket closed', event);
+                    statusEl.textContent = `Disconnected from server (code: ${event.code})`;
+                    statusEl.classList.remove('connected');
+                    statusEl.classList.add('disconnected');
+                    
+                    // Attempt to reconnect with exponential backoff
+                    if (reconnectAttempts < maxReconnectAttempts) {
+                        const timeout = Math.min(1000 * Math.pow(2, reconnectAttempts), 10000);
+                        reconnectAttempts++;
+                        
+                        statusEl.textContent = `Connection lost. Reconnecting in ${timeout/1000} seconds... (Attempt ${reconnectAttempts}/${maxReconnectAttempts})`;
+                        
+                        setTimeout(function() {
+                            connectWebSocket();
+                        }, timeout);
+                    } else {
+                        statusEl.textContent = 'Failed to reconnect after multiple attempts. Please refresh the page.';
+                    }
+                };
+                
+                socket.onerror = function(error) {
+                    console.error('WebSocket error:', error);
+                    statusEl.textContent = 'Error connecting to server';
+                    statusEl.classList.remove('connected');
+                    statusEl.classList.add('disconnected');
+                };
+                
+                socket.onmessage = function(event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        
+                        if (data.activeCalls) {
+                            // Initial data with all active calls
+                            data.activeCalls.forEach(call => {
+                                createOrUpdateCallCard(call.callSid, call.active);
+                                
+                                // Add logs
+                                call.logs.forEach(log => {
+                                    addLogEntry(call.callSid, log);
+                                });
+                            });
+                        } else if (data.type === 'update') {
+                            // Single update for a specific call
+                            createOrUpdateCallCard(data.callSid, data.active);
+                            addLogEntry(data.callSid, data.log);
+                        }
+                    } catch (error) {
+                        console.error('Error processing message:', error, event.data);
+                    }
+                };
+            }
+            
+            // Initial connection
+            connectWebSocket();
+            
+            // Add a heartbeat to detect connection issues
+            setInterval(function() {
+                if (socket && socket.readyState === WebSocket.OPEN) {
+                    // If needed, we could send a ping here
+                    console.log('Connection still active');
+                } else if (socket && socket.readyState === WebSocket.CLOSED) {
+                    console.log('Connection closed, attempting to reconnect');
+                    connectWebSocket();
+                }
+            }, 30000); // Check every 30 seconds
+            
+            function createOrUpdateCallCard(callSid, isActive) {
+                if (!calls.has(callSid)) {
+                    // Create new call card
+                    const callCard = document.createElement('div');
+                    callCard.className = 'call-card';
+                    callCard.innerHTML = `
+                        <div class="call-header">
+                            <div class="call-sid">${callSid}</div>
+                            <div class="call-status ${isActive ? 'active' : 'ended'}">${isActive ? 'Active' : 'Ended'}</div>
+                        </div>
+                        <div class="log-container" id="logs-${callSid}"></div>
+                    `;
+                    callsContainer.prepend(callCard);
+                    calls.set(callSid, callCard);
+                } else {
+                    // Update existing call card
+                    const callCard = calls.get(callSid);
+                    const statusEl = callCard.querySelector('.call-status');
+                    
+                    if (isActive) {
+                        statusEl.textContent = 'Active';
+                        statusEl.classList.add('active');
+                        statusEl.classList.remove('ended');
+                    } else {
+                        statusEl.textContent = 'Ended';
+                        statusEl.classList.add('ended');
+                        statusEl.classList.remove('active');
+                    }
+                }
+            }
+            
+            function addLogEntry(callSid, log) {
+                if (!calls.has(callSid)) return;
+                
+                const logsContainer = document.getElementById(`logs-${callSid}`);
+                const logEntry = document.createElement('div');
+                logEntry.className = 'log-entry';
+                
+                // Format the timestamp
+                const timestamp = new Date(log.timestamp);
+                const formattedTime = timestamp.toLocaleTimeString();
+                
+                // Determine if this is an AI message
+                const isAiMessage = log.message.startsWith('AI says:');
+                const isError = log.message.toLowerCase().includes('error');
+                
+                logEntry.innerHTML = `
+                    <span class="log-time">${formattedTime}</span>
+                    <span class="log-message ${isAiMessage ? 'ai-message' : ''} ${isError ? 'error' : ''}">${log.message}</span>
+                `;
+                
+                logsContainer.appendChild(logEntry);
+                logsContainer.scrollTop = logsContainer.scrollHeight;
+            }
+        });
+    </script>
+</body>
+</html> 
