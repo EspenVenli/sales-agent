@@ -265,14 +265,6 @@ async function makeCall(phoneNumber, metadata = {}) {
 
 // Initialize Fastify
 const fastify = Fastify();
-
-// Add CORS support globally
-fastify.addHook('onRequest', async (request, reply) => {
-  reply.header('Access-Control-Allow-Origin', '*');
-  reply.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  reply.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-});
-
 fastify.register(fastifyFormBody);
 fastify.register(fastifyWs);
 
@@ -302,7 +294,7 @@ fastify.get('/health', async (request, reply) => {
 
 // Test WebSocket connectivity endpoint
 fastify.get('/test-websocket', async (request, reply) => {
-    const wsUrl = `wss://${DOMAIN}/ws/media-stream`;
+    const wsUrl = `wss://${DOMAIN}/media-stream`;
     return { 
         websocketUrl: wsUrl,
         domain: DOMAIN,
@@ -310,24 +302,9 @@ fastify.get('/test-websocket', async (request, reply) => {
     };
 });
 
-// HTTP fallback for media-stream (when accessed via HTTP instead of WebSocket)
-fastify.get('/media-stream', async (request, reply) => {
-    const upgradeHeader = request.headers['upgrade'];
-    if (upgradeHeader !== 'websocket') {
-        console.log(`❌ HTTP request to WebSocket endpoint from ${request.ip}`);
-        return reply.status(400).send({
-            error: 'This endpoint requires WebSocket upgrade',
-            message: 'Use wss:// protocol to connect to this endpoint',
-            websocketUrl: `wss://${DOMAIN}/media-stream`
-        });
-    }
-    // This shouldn't happen, but just in case
-    return reply.status(426).send({ error: 'Upgrade Required' });
-});
-
 // WebSocket route for media-stream
 fastify.register(async (fastify) => {
-    fastify.get('/ws/media-stream', { websocket: true }, (connection, req) => {
+    fastify.get('/media-stream', { websocket: true }, (connection, req) => {
         const connectionId = Math.random().toString(36).substring(2, 10);
         console.log(`>>> /media-stream: Client connected [ID: ${connectionId}]`);
         const connectTime = Date.now();
@@ -974,15 +951,15 @@ fastify.post('/call', async (request, reply) => {
   }
 });
 
-// Function to generate outboundTwML (Now accepts language and callSid)
-function generateTwiML(language, callSid) {
-  const streamUrl = `wss://${DOMAIN}/ws/media-stream`;
-  // Use the actual callSid instead of template
+// Function to generate outboundTwML (Now accepts language)
+function generateTwiML(language) {
+  const streamUrl = `wss://${DOMAIN}/media-stream`;
+  // Remove the <Say> verb
   return `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Connect>
     <Stream url="${streamUrl}">
-      <Parameter name="callSid" value="${callSid}"/>
+      <Parameter name="callSid" value="{{CallSid}}"/>
       <Parameter name="language" value="${language}"/>
     </Stream>
   </Connect>
@@ -1002,8 +979,8 @@ fastify.post('/twiml', async (request, reply) => {
     const language = request.query?.language || 'en-US'; // Default to en-US if not provided
     console.log(`TwiML requested for call: ${callSid || 'Unknown'}, Language: ${language}`);
 
-    // Generate TwiML, passing the language and callSid
-    const twiml = generateTwiML(language, callSid);
+    // Generate TwiML, passing the language
+    const twiml = generateTwiML(language);
     console.log(`Generated TwiML: ${twiml}`);
 
   reply.header('Content-Type', 'text/xml');
@@ -1012,14 +989,6 @@ fastify.post('/twiml', async (request, reply) => {
     console.error('!!! Error in /twiml endpoint:', error);
     reply.status(500).send('Error generating TwiML');
   }
-});
-
-// Handle OPTIONS requests for TwiML endpoint
-fastify.options('/twiml', async (request, reply) => {
-  reply.header('Access-Control-Allow-Origin', '*');
-  reply.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  reply.header('Access-Control-Allow-Headers', 'Content-Type');
-  return reply.code(204).send();
 });
 
 // Endpoint to check call status
