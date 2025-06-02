@@ -90,34 +90,7 @@ function log(message) {
   logStream.write(logMessage);
 }
 
-/* --------------------------------------------------------------
-   Helper → turn raw date into "June 6th"
-----------------------------------------------------------------*/
-function formatDateForSpeech(raw) {
-  if (!raw) return raw;                       // empty safeguard
-
-  const parts = raw.includes('-') ? raw.split('-') : raw.split('/');
-  let year, month, day;
-
-  // ISO (YYYY-MM-DD) vs. US (MM/DD/YYYY)
-  if (parts[0].length === 4) {
-    [year, month, day] = parts;
-  } else {
-    [month, day, year] = parts;
-  }
-
-  const date = new Date(`${year}-${month}-${day}`);
-  if (isNaN(date)) return raw;                // bad input → keep as-is
-
-  const monthName = date.toLocaleString('en-US', { month: 'long' });
-  const d = date.getDate();
-  const ordinal =
-    d % 10 === 1 && d !== 11 ? 'st' :
-    d % 10 === 2 && d !== 12 ? 'nd' :
-    d % 10 === 3 && d !== 13 ? 'rd' : 'th';
-
-  return `${monthName} ${d}${ordinal}`;
-}
+/* -- 
 
 /* --------------------------------------------------------------
    Build NATURAL, EXPRESSIVE system prompt for Sales Agent
@@ -381,7 +354,7 @@ fastify.register(async (fastify) => {
                         type: 'server_vad',
                         threshold: 0.65,
                         prefix_padding_ms: 300,
-                        silence_duration_ms: 700
+                        silence_duration_ms: 600
                     },
                     input_audio_format: 'g711_ulaw',
                     output_audio_format: 'g711_ulaw',
