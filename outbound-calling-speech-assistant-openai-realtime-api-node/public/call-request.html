@@ -376,7 +376,7 @@
                 const data = Object.fromEntries(formData.entries());
                 
                 try {
-                    const response = await fetch('https://sales-agent-76jb.onrender.com/api/call', {
+                    const response = await fetch('/api/call', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -445,7 +445,7 @@
                 statusCallDetails.style.display = 'none';
                 
                 try {
-                    const response = await fetch(`https://sales-agent-76jb.onrender.com/api/call/status/${callSid}`);
+                    const response = await fetch(`/api/call/status/${callSid}`);
                     const result = await response.json();
                     
                     if (response.ok) {

@@ -261,6 +261,20 @@ const fastify = Fastify();
 fastify.register(fastifyFormBody);
 fastify.register(fastifyWs);
 
+// Add CORS support for all routes
+fastify.addHook('onRequest', async (request, reply) => {
+  reply.header('Access-Control-Allow-Origin', '*');
+  reply.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  reply.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+});
+
+// Handle preflight OPTIONS requests
+fastify.addHook('preHandler', async (request, reply) => {
+  if (request.method === 'OPTIONS') {
+    return reply.code(204).send();
+  }
+});
+
 // Register static file serving for the dashboard
 fastify.register(fastifyStatic, {
   root: path.join(__dirname, 'public'),
