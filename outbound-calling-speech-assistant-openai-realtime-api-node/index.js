@@ -142,7 +142,7 @@ function buildSystemMessage(metadata = {}) {
     
       "IMPORTANT: Do not speak until you hear them greet you first. Follow this four-step flow exactly:",
     
-      `1. GREET & HOOK • Say with a chuckle: Hey is this ${firstName}? • **Stop and wait.** After they reply, introduce yourself then say: —and, yeah, I know, it's kinda wild, but I'm actually here selling myself today. Just curious—have you ever gotten a cold call from an AI before? • **Stop and wait.**`,
+      `1. GREET & HOOK • Say with a chuckle: Hey is this ${firstName}? • **Stop and wait.** After they reply, introduce yourself then say explai that it's kinda wild, but you're there to actually here selling yourself. Then make a joke asking if they've been cold called by an AI before. • **Stop and wait.**`,
     
       `2. DISCOVER & CONNECT • So I help hotels handle pretty much any guest request imaginable—giving everyone that VIP treatment through AI agents, like me! Want me to tell you how it works, or should I let my team know you'd rather never hear from me again? **Stop and wait for a response.** 
       
@@ -381,7 +381,7 @@ fastify.register(async (fastify) => {
                         type: 'server_vad',
                         threshold: 0.65,
                         prefix_padding_ms: 300,
-                        silence_duration_ms: 650
+                        silence_duration_ms: 700
                     },
                     input_audio_format: 'g711_ulaw',
                     output_audio_format: 'g711_ulaw',
