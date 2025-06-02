@@ -362,9 +362,9 @@ fastify.register(async (fastify) => {
                 session: {
                     turn_detection: {
                         type: 'server_vad',
-                        threshold: 0.5,
+                        threshold: 0.7,
                         prefix_padding_ms: 300,
-                        silence_duration_ms: 500
+                        silence_duration_ms: 800
                     },
                     input_audio_format: 'g711_ulaw',
                     output_audio_format: 'g711_ulaw',
@@ -496,7 +496,7 @@ fastify.register(async (fastify) => {
 
                 openAiWs.on('open', () => {
                     console.log(`[${connectionId}][${callSid}] OpenAI WebSocket connected successfully.`);
-                    console.log(`[${connectionId}][${callSid}] 🎯 INTERRUPTION SYSTEM: VAD configured with threshold=0.5, padding=300ms, silence=500ms`);
+                    console.log(`[${connectionId}][${callSid}] 🎯 INTERRUPTION SYSTEM: VAD configured with threshold=0.7, padding=300ms, silence=800ms`);
                     // Now that it's open AND we know callSid exists (because setupOpenAI is called after start event),
                     // send the session update.
                      if (callSid && callActive) {
