@@ -236,7 +236,7 @@ async function makeCall(phoneNumber, metadata = {}) {
     console.log(`👤 Contact metadata:`, metadata);
     
     const call = await client.calls.create({
-      url: `https://sales-agent-76jb.onrender.com/webhook/call`,
+      url: `https://${DOMAIN}/webhook/call`,
       to: phoneNumber,
       from: PHONE_NUMBER_FROM
     });
@@ -886,7 +886,7 @@ fastify.post('/call', async (request, reply) => {
   try {
     // Initiate the call using Twilio
     const call = await client.calls.create({
-      url: `https://${DOMAIN}/twiml`,
+      url: `https://${DOMAIN}/webhook/call`,
       to: phoneNumberTo,
       from: PHONE_NUMBER_FROM,
     });
