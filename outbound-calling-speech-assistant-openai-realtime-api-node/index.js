@@ -123,11 +123,11 @@ function formatDateForSpeech(raw) {
    Build NATURAL, EXPRESSIVE system prompt for Sales Agent
 ----------------------------------------------------------------*/
 function buildSystemMessage(metadata = {}) {
-    const { firstName = 'there', company = '', jobTitle = '', additionalNotes = '' } = metadata;
+    const { firstName = '', company = '', industry = '', jobTitle = '', additionalNotes = '' } = metadata;
     
     const contactContext = company ? 
-        `You're calling ${firstName} from ${company}${jobTitle ? ` where they work as ${jobTitle}` : ''}.` :
-        `You're calling ${firstName}.`;
+        `You're calling ${firstName} who works at ${company}${jobTitle ? ` as a ${jobTitle}` : ''}${industry ? ` in the ${industry} industry` : ''}.` :
+        `You represent FelixOS, which is the AI operating system built for modern hospitality.`;
     
     const notesContext = additionalNotes ? 
         `Additional context: ${additionalNotes}` : '';
@@ -141,7 +141,7 @@ function buildSystemMessage(metadata = {}) {
         "If they ask about pricing, be vague and say you can connect them with the sales team for a personalized demo.",
         "If they seem annoyed or frustrated, offer to follow up via email instead.",
         "Do not speak until you hear them greet you first. When you reply, follow this four-step flow exactly:",
-        `1. GREET & HOOK • Say: Hi ${firstName}! This is Felix calling. I'm actually an AI guest services agent, and I'm here selling myself today, which is kinda wild, right? Quick question—have you ever gotten a cold call from an AI before? • **Stop and wait.**`,
+        `1. GREET & HOOK • Say with a chuckle: Hey is this ${firstName}? **Stop and wait for a response.** After they confirm, say: This is Felix calling. I'm actually a guest services agent from FelixOS, and I'm here selling myself today, which is kinda wild, right? Quick question—have you ever gotten a cold call from an AI before? • **Stop and wait.**`,
         `2. DISCOVER & CONNECT • After you respond, say: So I work with hotels to handle guest services—like room service, concierge requests, that sort of thing. I'm curious about ${company}—what's guest services like there? Do you handle most requests at the front desk, or do you have a concierge team? • **Stop, wait and respond.**`,
         "Ask natural follow-up questions based on what they share. Get curious about their current challenges: What takes up most of your team's time? Do guests ever have to wait for service? Any particular pain points during busy seasons? • **Stop and wait for each response.**",
         "Share relevant insights naturally: Y'know, a lot of hotels tell me their front desk gets swamped with the same questions—like pool hours, restaurant reservations, late checkout requests. Does that sound familiar? • **Stop and wait.**",
@@ -310,6 +310,7 @@ fastify.register(async (fastify) => {
             
             const systemMessage = buildSystemMessage(metadata);
             console.log(`[${connectionId}][${callSid}] 🤖 Generated system message:`, systemMessage.substring(0, 200) + '...');
+            console.log(`[${connectionId}][${callSid}] 🤖 FULL SYSTEM MESSAGE:`, systemMessage);
             
             const sessionUpdate = {
                 type: 'session.update',
@@ -1155,12 +1156,12 @@ fastify.post('/api/call', async (request, reply) => {
   console.log('🔥 Call request received:', request.body);
   
   try {
-    const { firstName, phoneNumber, company, jobTitle, additionalNotes } = request.body;
+    const { firstName, phoneNumber, company, industry, jobTitle, additionalNotes } = request.body;
     
-    // Validate required fields
-    if (!firstName || !phoneNumber || !company || !jobTitle) {
+    // Validate required fields (including industry since it's required in the form)
+    if (!firstName || !phoneNumber || !company || !industry || !jobTitle) {
         return reply.status(400).send({ 
-            error: 'Missing required fields: firstName, phoneNumber, company, and jobTitle are required' 
+            error: 'Missing required fields: firstName, phoneNumber, company, industry, and jobTitle are required' 
         });
     }
     
@@ -1168,6 +1169,7 @@ fastify.post('/api/call', async (request, reply) => {
     const metadata = {
         firstName,
         company,
+        industry,
         jobTitle,
         additionalNotes: additionalNotes || ''
     };
@@ -1182,7 +1184,7 @@ fastify.post('/api/call', async (request, reply) => {
         sid: callSid,
         status: 'queued',
         contactInfo: `${firstName} - ${phoneNumber}`,
-        companyInfo: `${company} (${jobTitle})`,
+        companyInfo: `${company} (${jobTitle}) - ${industry}`,
         createdAt: new Date().toISOString(),
         metadata
     };
