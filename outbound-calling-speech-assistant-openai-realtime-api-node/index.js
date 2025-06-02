@@ -33,7 +33,7 @@ const DOMAIN = rawDomain ? rawDomain.replace(/(^\w+:|^)\/\//, '').replace(/\/+$/
 // const SYSTEM_MESSAGE = "You are Felix, ..."; // Old SYSTEM_MESSAGE removed as it's replaced by the dynamic buildSystemMessage
 const VOICE = 'ballad'; // Options include: alloy, ash, ballad, coral, echo, sage, shimmer, and verse
 const PORT = process.env.PORT || 6060; // Allow dynamic port assignment
-const INITIAL_USER_MESSAGE = "Hello?"; // Define the initial message
+const INITIAL_USER_MESSAGE = "*Session Started*"; // Define the initial message
 
 // List of Event Types to log to the console. See the OpenAI Realtime API Documentation.
 const LOG_EVENT_TYPES = [
@@ -358,9 +358,9 @@ fastify.register(async (fastify) => {
                 session: {
                     turn_detection: {
                         type: 'server_vad',
-                        threshold: 0.5,
+                        threshold: 0.6,
                         prefix_padding_ms: 300,
-                        silence_duration_ms: 500
+                        silence_duration_ms: 600
                     },
                     input_audio_format: 'g711_ulaw',
                     output_audio_format: 'g711_ulaw',
