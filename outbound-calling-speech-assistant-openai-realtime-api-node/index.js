@@ -235,10 +235,17 @@ async function makeCall(phoneNumber, metadata = {}) {
     console.log(`📱 Making Felix demo call to: ${phoneNumber}`);
     console.log(`👤 Contact metadata:`, metadata);
     
+    // Use the simpler /twiml endpoint with language parameter
+    const twimlUrl = `https://${DOMAIN}/twiml?language=en-US`;
+    console.log(`TwiML endpoint URL: ${twimlUrl}`);
+    
     const call = await client.calls.create({
-      url: `https://${DOMAIN}/webhook/call`,
+      url: twimlUrl,
       to: phoneNumber,
-      from: PHONE_NUMBER_FROM
+      from: PHONE_NUMBER_FROM,
+      statusCallback: `https://${DOMAIN}/call-status`,
+      statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed'],
+      statusCallbackMethod: 'POST'
     });
     
     console.log(`✨ Felix demo call created with SID: ${call.sid}`);
@@ -257,55 +264,9 @@ async function makeCall(phoneNumber, metadata = {}) {
 }
 
 // Initialize Fastify
-const fastify = Fastify({
-    logger: {
-        level: 'info',
-        serializers: {
-            req: (req) => {
-                return {
-                    method: req.method,
-                    url: req.url,
-                    headers: req.headers,
-                    remoteAddress: req.ip,
-                    remotePort: req.socket?.remotePort
-                }
-            }
-        }
-    }
-});
-
+const fastify = Fastify();
 fastify.register(fastifyFormBody);
-
-// Register WebSocket plugin with explicit configuration
-fastify.register(fastifyWs, {
-    options: {
-        maxPayload: 1048576,
-        verifyClient: (info, next) => {
-            console.log(`🔍 WebSocket upgrade request from ${info.req.socket.remoteAddress}:${info.req.socket.remotePort}`);
-            console.log(`🔍 Headers:`, JSON.stringify(info.req.headers, null, 2));
-            console.log(`🔍 Origin: ${info.origin || 'No origin'}`);
-            console.log(`🔍 Secure: ${info.secure}`);
-            console.log(`🔍 URL: ${info.req.url}`);
-            
-            // Always allow connections but log for debugging
-            next(true);
-        }
-    }
-});
-
-// Add CORS support for all routes
-fastify.addHook('onRequest', async (request, reply) => {
-  reply.header('Access-Control-Allow-Origin', '*');
-  reply.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  reply.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-});
-
-// Handle preflight OPTIONS requests
-fastify.addHook('preHandler', async (request, reply) => {
-  if (request.method === 'OPTIONS') {
-    return reply.code(204).send();
-  }
-});
+fastify.register(fastifyWs);
 
 // Register static file serving for the dashboard
 fastify.register(fastifyStatic, {
@@ -341,478 +302,454 @@ fastify.get('/test-websocket', async (request, reply) => {
     };
 });
 
-// WebSocket connectivity test endpoint - this will return 400 when accessed via HTTP but proves the route exists
-fastify.get('/media-stream', async (request, reply) => {
-    const upgradeHeader = request.headers['upgrade'];
-    if (upgradeHeader !== 'websocket') {
-        console.log(`❌ HTTP request to WebSocket endpoint from ${request.ip}`);
-        console.log(`📋 Headers:`, JSON.stringify(request.headers, null, 2));
-        return reply.status(400).send({
-            error: 'This endpoint requires WebSocket upgrade',
-            message: 'Use wss:// protocol to connect to this endpoint',
-            websocketUrl: `wss://${DOMAIN}/media-stream`
-        });
-    }
-    // This shouldn't be reached as WebSocket upgrade should be handled by the plugin
-    return reply.status(400).send({ error: 'WebSocket upgrade failed' });
-});
-
 // WebSocket route for media-stream
 fastify.register(async (fastify) => {
-    console.log('🔧 Registering WebSocket route /media-stream...');
-    
-    try {
-        fastify.get('/media-stream', { websocket: true }, (connection, req) => {
-            const connectionId = Math.random().toString(36).substring(2, 10);
-            const connectTime = Date.now();
-            console.log(`🔗 ========== MEDIA STREAM CLIENT CONNECTED ==========`);
-            console.log(`📋 Connection ID: ${connectionId}`);
-            console.log(`⏰ Connect time: ${new Date().toISOString()}`);
-            console.log(`🌐 Request headers:`, JSON.stringify(req.headers, null, 2));
-            console.log(`📍 Client IP: ${req.ip || req.socket?.remoteAddress || 'unknown'}`);
-            console.log(`🔧 User Agent: ${req.headers?.['user-agent'] || 'unknown'}`);
-            console.log(`🔍 Connection type:`, typeof connection);
-            console.log(`🔍 Connection keys:`, Object.keys(connection || {}));
+    fastify.get('/media-stream', { websocket: true }, (connection, req) => {
+        const connectionId = Math.random().toString(36).substring(2, 10);
+        console.log(`>>> /media-stream: Client connected [ID: ${connectionId}]`);
+        const connectTime = Date.now();
+        console.log(`⏰ Connect time: ${new Date().toISOString()}`);
+        console.log(`🌐 Request headers:`, JSON.stringify(req.headers, null, 2));
+        console.log(`📍 Client IP: ${req.ip || req.socket?.remoteAddress || 'unknown'}`);
+        console.log(`🔧 User Agent: ${req.headers?.['user-agent'] || 'unknown'}`);
+        console.log(`🔍 Connection type:`, typeof connection);
+        console.log(`🔍 Connection keys:`, Object.keys(connection || {}));
 
-            let callSid = null;
-            let openAiWs = null;
-            let streamSid = null;
-            let callActive = false;
-            let userLanguage = 'en-US'; // Variable to store the language for this call
-            let aiSpeaking = false; // Track if AI is currently speaking
-            let userSpeaking = false; // Track if user is currently speaking
+        let callSid = null;
+        let openAiWs = null;
+        let streamSid = null;
+        let callActive = false;
+        let userLanguage = 'en-US'; // Variable to store the language for this call
+        let aiSpeaking = false; // Track if AI is currently speaking
+        let userSpeaking = false; // Track if user is currently speaking
 
-            // Define sendInitialSessionUpdate first
-            const sendInitialSessionUpdate = () => {
-                if (!openAiWs || openAiWs.readyState !== WebSocket.OPEN) {
-                    console.error(`[${connectionId}][${callSid}] Cannot send session update: OpenAI WebSocket not open`);
-                    return;
-                }
-                if (!callSid || !callActive || !streamSid) {
-                    console.warn(`[${connectionId}] Delaying session update: prerequisites not met (callSid=${callSid}, callActive=${callActive}, streamSid=${streamSid})`);
-                    return;
-                }
-                console.log(`[${connectionId}][${callSid}] Sending session update for call`);
-                
-                // Get metadata and build system message
-                const metadata = callMetadata.get(callSid) || {};
-                console.log(`[${connectionId}][${callSid}] 📋 Retrieved metadata:`, JSON.stringify(metadata, null, 2));
-                
-                const systemMessage = buildSystemMessage(metadata);
-                console.log(`[${connectionId}][${callSid}] 🤖 Generated system message:`, systemMessage.substring(0, 200) + '...');
-                console.log(`[${connectionId}][${callSid}] 🤖 FULL SYSTEM MESSAGE:`, systemMessage);
-                
-                const sessionUpdate = {
-                    type: 'session.update',
-                    session: {
-                        turn_detection: {
-                            type: 'server_vad',
-                            threshold: 0.6,
-                            prefix_padding_ms: 300,
-                            silence_duration_ms: 800
-                        },
-                        input_audio_format: 'g711_ulaw',
-                        output_audio_format: 'g711_ulaw',
-                        voice: VOICE,
-                        instructions: systemMessage,
-                        modalities: ["text", "audio"],
-                        temperature: 1.0,
-                        input_audio_transcription: {
-                            model: "whisper-1"
-                        },
-                        tool_choice: "none",
-                        max_response_output_tokens: 4096
-                    }
-                };
-                openAiWs.send(JSON.stringify(sessionUpdate));
-                broadcastStatus(callSid, 'Sending session update to OpenAI');
-            };
-
-            // --- Setup Twilio Socket Listeners FIRST ---
-            const socket = connection.socket || connection;
-
-            if (!socket || typeof socket.on !== 'function') {
-                 console.error(`[${connectionId}] FATAL: Could not obtain a valid socket object upon entry. Connection keys: ${Object.keys(connection || {}).join(', ')}`);
-                 return;
+        // Define sendInitialSessionUpdate first
+        const sendInitialSessionUpdate = () => {
+            if (!openAiWs || openAiWs.readyState !== WebSocket.OPEN) {
+                console.error(`[${connectionId}][${callSid}] Cannot send session update: OpenAI WebSocket not open`);
+                return;
             }
-            console.log(`[${connectionId}] Attaching listeners to Twilio socket...`);
-
-            socket.on('message', (message) => {
-                 try {
-                     const data = JSON.parse(message.toString());
-                     console.log(`[${connectionId}] 📨 Received Twilio event: ${data.event}`);
-                     console.log(`[${connectionId}] 📋 Event data:`, JSON.stringify(data, null, 2));
-                     
-                     switch (data.event) {
-                         case 'start':
-                             streamSid = data.start.streamSid;
-                             callSid = data.start.callSid || data.start.customParameters?.callSid;
-                             // *** Read language from custom parameters ***
-                             userLanguage = data.start.customParameters?.language || 'en-US';
-                             console.log(`[${connectionId}] 🚀 STREAM START EVENT`);
-                             console.log(`[${connectionId}] 📋 Stream SID: ${streamSid}`);
-                             console.log(`[${connectionId}] 📋 Call SID: ${callSid}`);
-                             console.log(`[${connectionId}] 🌐 Language: ${userLanguage}`);
-                             console.log(`[${connectionId}] 📋 Custom params:`, JSON.stringify(data.start.customParameters, null, 2));
-                             
-                             if (!callSid) {
-                                console.error(`[${connectionId}] ❌ CRITICAL: No callSid found in start event`);
-                                console.error(`[${connectionId}] 📋 Full start data:`, JSON.stringify(data.start, null, 2));
-                                try { socket.close(1011, 'No CallSid provided'); } catch(e){}
-                                return;
-                             }
-                             activeWebSockets.set(callSid, socket); // Use the derived socket object
-                             callActive = true;
-                             console.log(`[${connectionId}] ✅ Call marked as active for ${callSid}`);
-                             broadcastStatus(callSid, 'Call connected, media stream started');
-
-                             // Initiate OpenAI connection *after* getting callSid
-                             console.log(`[${connectionId}][${callSid}] 🤖 Initiating OpenAI connection now...`);
-                             setupOpenAIConnection(); // Call the setup function
-                             break;
-                         case 'media':
-                             if (!callSid || !callActive) { 
-                                console.log(`[${connectionId}] ⚠️ Dropping media - callSid: ${callSid}, active: ${callActive}`);
-                                return; 
-                             }
-                             if (openAiWs && openAiWs.readyState === WebSocket.OPEN) {
-                                const audioAppend = { type: 'input_audio_buffer.append', audio: data.media.payload };
-                                openAiWs.send(JSON.stringify(audioAppend));
-                             } else {
-                                console.log(`[${connectionId}] ⚠️ Dropping media - OpenAI WS not ready. State: ${openAiWs?.readyState || 'null'}`);
-                             }
-                             break;
-                         default:
-                             console.log(`[${connectionId}] 📨 Received non-media event: ${data.event}`);
-                             if (callSid) { broadcastStatus(callSid, `Received event: ${data.event}`); }
-                             break;
-                     }
-                 } catch (error) {
-                     console.error(`[${connectionId}] ❌ Error parsing Twilio message: ${error.message}`);
-                     console.error(`[${connectionId}] 📋 Raw message:`, message.toString());
-                     if (callSid) { broadcastStatus(callSid, `Error parsing Twilio message: ${error.message}`); }
-                 }
-            });
-
-            socket.on('close', (code, reason) => {
-                 console.error(`[${connectionId}] $$$ TWILIO SOCKET CLOSED EVENT $$$ Code: ${code}, Reason: ${reason ? reason.toString() : 'N/A'}`);
-                if (openAiWs && openAiWs.readyState !== WebSocket.CLOSED) {
-                    try{ openAiWs.close(); } catch(e){}
+            if (!callSid || !callActive || !streamSid) {
+                console.warn(`[${connectionId}] Delaying session update: prerequisites not met (callSid=${callSid}, callActive=${callActive}, streamSid=${streamSid})`);
+                return;
+            }
+            console.log(`[${connectionId}][${callSid}] Sending session update for call`);
+            
+            // Get metadata and build system message
+            const metadata = callMetadata.get(callSid) || {};
+            console.log(`[${connectionId}][${callSid}] 📋 Retrieved metadata:`, JSON.stringify(metadata, null, 2));
+            
+            const systemMessage = buildSystemMessage(metadata);
+            console.log(`[${connectionId}][${callSid}] 🤖 Generated system message:`, systemMessage.substring(0, 200) + '...');
+            console.log(`[${connectionId}][${callSid}] 🤖 FULL SYSTEM MESSAGE:`, systemMessage);
+            
+            const sessionUpdate = {
+                type: 'session.update',
+                session: {
+                    turn_detection: {
+                        type: 'server_vad',
+                        threshold: 0.6,
+                        prefix_padding_ms: 300,
+                        silence_duration_ms: 800
+                    },
+                    input_audio_format: 'g711_ulaw',
+                    output_audio_format: 'g711_ulaw',
+                    voice: VOICE,
+                    instructions: systemMessage,
+                    modalities: ["text", "audio"],
+                    temperature: 1.0,
+                    input_audio_transcription: {
+                        model: "whisper-1"
+                    },
+                    tool_choice: "none",
+                    max_response_output_tokens: 4096
                 }
-                if (callSid) {
-                    activeWebSockets.delete(callSid);
-                    callActive = false;
-                    broadcastStatus(callSid, 'Twilio socket closed');
-                }
-            });
+            };
+            openAiWs.send(JSON.stringify(sessionUpdate));
+            broadcastStatus(callSid, 'Sending session update to OpenAI');
+        };
 
-            socket.on('error', (error) => {
-                console.error(`[${connectionId}] $$$ TWILIO SOCKET ERROR EVENT $$$ Error: ${error.message}`);
-                console.error(error.stack);
-                if (openAiWs && openAiWs.readyState !== WebSocket.CLOSED) {
-                     try{ openAiWs.close(); } catch(e){}
-                }
-                 if (callSid) {
-                     activeWebSockets.delete(callSid);
-                     callActive = false;
-                     broadcastStatus(callSid, `Twilio WebSocket error: ${error.message}`);
+        // --- Setup Twilio Socket Listeners FIRST ---
+        const socket = connection.socket || connection;
+
+        if (!socket || typeof socket.on !== 'function') {
+             console.error(`[${connectionId}] FATAL: Could not obtain a valid socket object upon entry. Connection keys: ${Object.keys(connection || {}).join(', ')}`);
+             return;
+        }
+        console.log(`[${connectionId}] Attaching listeners to Twilio socket...`);
+
+        socket.on('message', (message) => {
+             try {
+                 const data = JSON.parse(message.toString());
+                 console.log(`[${connectionId}] 📨 Received Twilio event: ${data.event}`);
+                 console.log(`[${connectionId}] 📋 Event data:`, JSON.stringify(data, null, 2));
+                 
+                 switch (data.event) {
+                     case 'start':
+                         streamSid = data.start.streamSid;
+                         callSid = data.start.callSid || data.start.customParameters?.callSid;
+                         // *** Read language from custom parameters ***
+                         userLanguage = data.start.customParameters?.language || 'en-US';
+                         console.log(`[${connectionId}] 🚀 STREAM START EVENT`);
+                         console.log(`[${connectionId}] 📋 Stream SID: ${streamSid}`);
+                         console.log(`[${connectionId}] 📋 Call SID: ${callSid}`);
+                         console.log(`[${connectionId}] 🌐 Language: ${userLanguage}`);
+                         console.log(`[${connectionId}] 📋 Custom params:`, JSON.stringify(data.start.customParameters, null, 2));
+                         
+                         if (!callSid) {
+                            console.error(`[${connectionId}] ❌ CRITICAL: No callSid found in start event`);
+                            console.error(`[${connectionId}] 📋 Full start data:`, JSON.stringify(data.start, null, 2));
+                            try { socket.close(1011, 'No CallSid provided'); } catch(e){}
+                            return;
+                         }
+                         activeWebSockets.set(callSid, socket); // Use the derived socket object
+                         callActive = true;
+                         console.log(`[${connectionId}] ✅ Call marked as active for ${callSid}`);
+                         broadcastStatus(callSid, 'Call connected, media stream started');
+
+                         // Initiate OpenAI connection *after* getting callSid
+                         console.log(`[${connectionId}][${callSid}] 🤖 Initiating OpenAI connection now...`);
+                         setupOpenAIConnection(); // Call the setup function
+                         break;
+                     case 'media':
+                         if (!callSid || !callActive) { 
+                            console.log(`[${connectionId}] ⚠️ Dropping media - callSid: ${callSid}, active: ${callActive}`);
+                            return; 
+                         }
+                         if (openAiWs && openAiWs.readyState === WebSocket.OPEN) {
+                            const audioAppend = { type: 'input_audio_buffer.append', audio: data.media.payload };
+                            openAiWs.send(JSON.stringify(audioAppend));
+                         } else {
+                            console.log(`[${connectionId}] ⚠️ Dropping media - OpenAI WS not ready. State: ${openAiWs?.readyState || 'null'}`);
+                         }
+                         break;
+                     default:
+                         console.log(`[${connectionId}] 📨 Received non-media event: ${data.event}`);
+                         if (callSid) { broadcastStatus(callSid, `Received event: ${data.event}`); }
+                         break;
                  }
-            });
+             } catch (error) {
+                 console.error(`[${connectionId}] ❌ Error parsing Twilio message: ${error.message}`);
+                 console.error(`[${connectionId}] 📋 Raw message:`, message.toString());
+                 if (callSid) { broadcastStatus(callSid, `Error parsing Twilio message: ${error.message}`); }
+             }
+        });
 
-            console.log(`[${connectionId}] Twilio WebSocket event listeners attached.`);
+        socket.on('close', (code, reason) => {
+             console.error(`[${connectionId}] $$$ TWILIO SOCKET CLOSED EVENT $$$ Code: ${code}, Reason: ${reason ? reason.toString() : 'N/A'}`);
+            if (openAiWs && openAiWs.readyState !== WebSocket.CLOSED) {
+                try{ openAiWs.close(); } catch(e){}
+            }
+            if (callSid) {
+                activeWebSockets.delete(callSid);
+                callActive = false;
+                broadcastStatus(callSid, 'Twilio socket closed');
+            }
+        });
 
-            // --- Define OpenAI Setup Function ---
-            const setupOpenAIConnection = () => {
-                 if (openAiWs) { // Avoid re-initializing if already done
-                      console.log(`[${connectionId}][${callSid}] OpenAI connection already initialized.`);
-                      // If it's already open, send session update
-                      if (openAiWs.readyState === WebSocket.OPEN && callSid && callActive) {
-                           setTimeout(sendInitialSessionUpdate, 100);
-                      }
-                      return;
-                 }
+        socket.on('error', (error) => {
+            console.error(`[${connectionId}] $$$ TWILIO SOCKET ERROR EVENT $$$ Error: ${error.message}`);
+            console.error(error.stack);
+            if (openAiWs && openAiWs.readyState !== WebSocket.CLOSED) {
+                 try{ openAiWs.close(); } catch(e){}
+            }
+             if (callSid) {
+                 activeWebSockets.delete(callSid);
+                 callActive = false;
+                 broadcastStatus(callSid, `Twilio WebSocket error: ${error.message}`);
+             }
+        });
 
-                 try {
-                    console.log(`[${connectionId}][${callSid}] Attempting to create OpenAI WebSocket connection...`);
-                    openAiWs = new WebSocket('wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview', {
-                        headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, "OpenAI-Beta": "realtime=v1" }
-                    });
-                    console.log(`[${connectionId}][${callSid}] OpenAI WebSocket object created.`);
+        console.log(`[${connectionId}] Twilio WebSocket event listeners attached.`);
 
-                    openAiWs.on('open', () => {
-                        console.log(`[${connectionId}][${callSid}] OpenAI WebSocket connected successfully.`);
-                        console.log(`[${connectionId}][${callSid}] 🎯 INTERRUPTION SYSTEM: VAD configured with threshold=0.6, padding=300ms, silence=800ms`);
-                        // Now that it's open AND we know callSid exists (because setupOpenAI is called after start event),
-                        // send the session update.
-                         if (callSid && callActive) {
-                            setTimeout(sendInitialSessionUpdate, 100);
-                        }
-                    });
+        // --- Define OpenAI Setup Function ---
+        const setupOpenAIConnection = () => {
+             if (openAiWs) { // Avoid re-initializing if already done
+                  console.log(`[${connectionId}][${callSid}] OpenAI connection already initialized.`);
+                  // If it's already open, send session update
+                  if (openAiWs.readyState === WebSocket.OPEN && callSid && callActive) {
+                       setTimeout(sendInitialSessionUpdate, 100);
+                  }
+                  return;
+             }
 
-                    openAiWs.on('message', (data) => {
-                        try {
-                            if (!callSid || !callActive) { console.warn(`[${connectionId}] OpenAI message ignored, call not active.`); return; }
-                            const response = JSON.parse(data);
+             try {
+                console.log(`[${connectionId}][${callSid}] Attempting to create OpenAI WebSocket connection...`);
+                openAiWs = new WebSocket('wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview', {
+                    headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, "OpenAI-Beta": "realtime=v1" }
+                });
+                console.log(`[${connectionId}][${callSid}] OpenAI WebSocket object created.`);
 
-                            // Log ALL events for debugging
-                            console.log(`[${connectionId}][${callSid}] Received OpenAI event: ${response.type}`);
-
-                            // Log detailed content for transcript-related events
-                            if (response.type.includes('content') || response.type.includes('conversation') || response.type.includes('response')) {
-                                console.log(`[${connectionId}][${callSid}] DETAILED EVENT DATA:, JSON.stringify(response, null, 2)`);
-                            }
-
-                            // Log the full response if it's an error type
-                            if (response.type === 'error') {
-                                console.error(`[${connectionId}][${callSid}] Received FULL OpenAI error event:, JSON.stringify(response, null, 2)`);
-                            }
-
-                            // Log content-related events in detail
-                            if (response.type.includes('content') || response.type.includes('transcript')) {
-                                console.log(`[${connectionId}][${callSid}] CONTENT EVENT DETAILS:, JSON.stringify(response, null, 2)`);
-                            }
-
-                            if (LOG_EVENT_TYPES.includes(response.type)) {
-                               broadcastStatus(callSid, `OpenAI event: ${response.type}`);
-                            }
-
-                            // Handle different response types
-                            switch (response.type) {
-                                case 'session.updated':
-                                    console.log(`[${connectionId}][${callSid}] Session updated. Ready for conversation in ${userLanguage}.`);
-                                    broadcastStatus(callSid, 'Session updated - ready for conversation');
-
-                                    // Request initial response from OpenAI (no context message needed since metadata is in system prompt)
-                                    console.log(`[${connectionId}][${callSid}] Requesting initial response from OpenAI.`);
-                                    openAiWs.send(JSON.stringify({
-                                        type: 'response.create',
-                                        response: {
-                                            modalities: ["text", "audio"],
-                                            instructions: "Always provide both text and audio responses. Include the text version of everything you say."
-                                        }
-                                    }));
-                                    broadcastStatus(callSid, 'Requested initial response');
-                                    break;
-
-                                case 'input_audio_buffer.speech_started':
-                                    console.log(`[${connectionId}][${callSid}] 🎤 USER STARTED SPEAKING - INTERRUPTING AI RESPONSE`);
-                                    userSpeaking = true;
-                                    aiSpeaking = false; // AI should stop speaking immediately
-
-                                    // Immediately cancel any ongoing AI response
-                                    openAiWs.send(JSON.stringify({
-                                        type: 'response.cancel'
-                                    }));
-
-                                    // Clear the input audio buffer to ensure clean interruption
-                                    openAiWs.send(JSON.stringify({
-                                        type: 'input_audio_buffer.clear'
-                                    }));
-
-                                    // Stop any ongoing audio playback on Twilio side
-                                    if (socket && socket.readyState === WebSocket.OPEN) {
-                                        const clearMessage = {
-                                            event: 'clear',
-                                            streamSid: streamSid
-                                        };
-                                        socket.send(JSON.stringify(clearMessage));
-                                    }
-
-                                    console.log(`[${connectionId}][${callSid}] ✅ Sent response.cancel, buffer.clear, and Twilio clear for interruption`);
-                                    broadcastStatus(callSid, 'User interrupted - AI response cancelled');
-                                    break;
-
-                                case 'input_audio_buffer.speech_stopped':
-                                    console.log(`[${connectionId}][${callSid}] 🎤 USER STOPPED SPEAKING - ready for AI response`);
-                                    userSpeaking = false;
-                                    broadcastStatus(callSid, 'User finished speaking');
-                                    break;
-
-                                case 'conversation.item.created':
-                                    console.log(`[${connectionId}][${callSid}] Conversation item created:, JSON.stringify(response.item, null, 2)`);
-
-                                    // Handle user messages
-                                    if (response.item?.role === 'user' && response.item?.content) {
-                                        const userText = response.item.content
-                                            .filter(c => c.type === 'input_text' || c.type === 'text')
-                                            .map(c => c.text || c.input_text)
-                                            .join(' ');
-
-                                        if (userText && userText.trim()) {
-                                            console.log(`[${connectionId}][${callSid}] Capturing user text:, userText`);
-                                            if (!callTranscripts.has(callSid)) {
-                                                console.log(`[${connectionId}][${callSid}] Creating new transcript array for user input`);
-                                                callTranscripts.set(callSid, []);
-                                            }
-                                            callTranscripts.get(callSid).push({ role: 'user', text: userText });
-                                            console.log(`[${connectionId}][${callSid}] Current transcript length after user input:, callTranscripts.get(callSid).length`);
-                                        }
-                                    }
-
-                                    // For assistant, we'll rely on response.content_part events to build the text
-                                    if (response.item?.role === 'assistant') {
-                                        console.log(`[${connectionId}][${callSid}] Assistant conversation item created. Text will be populated by content_part events.`);
-                                        // No need to add placeholder - content_part.added will handle this
-                                    }
-                                    break;
-
-                                case 'input_audio_buffer.committed':
-                                    console.log(`[${connectionId}][${callSid}] Audio buffer committed - user finished speaking`);
-                                    // User finished speaking → ask for AI response with both text and audio
-                                    openAiWs.send(JSON.stringify({
-                                        type: 'response.create',
-                                        response: {
-                                            modalities: ['text', 'audio'],
-                                            instructions: 'Always provide both text and audio responses. Include the text version of everything you say.'
-                                        }
-                                    }));
-                                    console.log(`[${connectionId}][${callSid}] Requested new response with text and audio`);
-                                    break;
-
-                                case 'conversation.item.input_audio_transcription.completed':
-                                    console.log(`[${connectionId}][${callSid}] User speech transcription completed:, JSON.stringify(response, null, 2)`);
-                                    if (response.transcript && response.transcript.trim()) {
-                                        console.log(`[${connectionId}][${callSid}] Capturing user speech transcript:, response.transcript`);
-                                        if (!callTranscripts.has(callSid)) {
-                                            console.log(`[${connectionId}][${callSid}] Creating new transcript array for user speech`);
-                                            callTranscripts.set(callSid, []);
-                                        }
-                                        callTranscripts.get(callSid).push({ role: 'user', text: response.transcript });
-                                        console.log(`[${connectionId}][${callSid}] Current transcript length after user speech:, callTranscripts.get(callSid).length`);
-                                    }
-                                    break;
-
-                                case 'response.audio.delta':
-                                    // ** Handle incoming audio from OpenAI and forward to Twilio **
-                                    // Only send audio if user is not currently speaking (to prevent talking over user)
-                                    if (response.delta && !userSpeaking) {
-                                        aiSpeaking = true;
-                                        // Ensure the Twilio socket is open before sending
-                                        if (socket && socket.readyState === WebSocket.OPEN) {
-                                            const mediaMessage = {
-                                                event: 'media',
-                                                streamSid: streamSid, // Ensure streamSid is available in this scope
-                                                media: {
-                                                    payload: response.delta // OpenAI sends base64 audio
-                                                }
-                                            };
-                                            // Send audio back to Twilio
-                                            socket.send(JSON.stringify(mediaMessage));
-                                        } else {
-                                            console.warn(`[${connectionId}][${callSid}] Twilio socket not open, cannot forward audio.`);
-                                        }
-                                    } else if (userSpeaking) {
-                                        console.log(`[${connectionId}][${callSid}] 🚫 Dropping AI audio delta - user is speaking`);
-                                    }
-                                    break;
-
-                                case 'response.output_item.added':
-                                    console.log(`[${connectionId}][${callSid}] Output item added:, JSON.stringify(response, null, 2)`);
-                                    // Prepare for incoming text/audio parts when assistant item is added
-                                    if (response.output_item && response.output_item.role === 'assistant') {
-                                        console.log(`[${connectionId}][${callSid}] ✅ ASSISTANT OUTPUT ITEM ADDED - preparing for transcript`);
-                                    }
-                                    break;
-
-                                case 'response.audio_transcript.delta':
-                                    console.log(`[${connectionId}][${callSid}] Audio transcript delta:, JSON.stringify(response, null, 2)`);
-                                    const transcriptPart = response.delta?.transcript;
-                                    if (transcriptPart?.trim()) {
-                                        console.log(`[${connectionId}][${callSid}] ✅ REAL AI TRANSCRIPT DELTA:, transcriptPart`);
-                                        if (!callTranscripts.has(callSid)) {
-                                            callTranscripts.set(callSid, []);
-                                        }
-                                        const transcript = callTranscripts.get(callSid);
-                                        const lastEntry = transcript.length > 0 ? transcript[transcript.length - 1] : null;
-
-                                        if (lastEntry && lastEntry.role === 'assistant') {
-                                            // Append to existing assistant message
-                                            lastEntry.text += transcriptPart;
-                                            console.log(`[${connectionId}][${callSid}] Appended transcript delta. Total length: ${lastEntry.text.length}`);
-                                        } else {
-                                            // Create new assistant message
-                                            transcript.push({ role: 'assistant', text: transcriptPart });
-                                            console.log(`[${connectionId}][${callSid}] Created new assistant message with transcript delta`);
-                                        }
-                                    }
-                                    break;
-
-                                case 'response.audio_transcript.done':
-                                    console.log(`[${connectionId}][${callSid}] Audio transcript done:, JSON.stringify(response, null, 2)`);
-                                    console.log(`[${connectionId}][${callSid}] ✅ ASSISTANT AUDIO TRANSCRIPT COMPLETE`);
-                                    break;
-
-                                case 'response.done':
-                                    console.log(`[${connectionId}][${callSid}] Response done:, JSON.stringify(response, null, 2)`);
-                                    aiSpeaking = false; // AI finished speaking
-
-                                    // Pull the final transcript from response.done
-                                    const items = response.response?.output || [];
-                                    const assistantItem = items.find(i => i.role === 'assistant');
-                                    const finalText = assistantItem?.content?.[0]?.transcript;
-                                    if (finalText?.trim()) {
-                                        console.log(`[${connectionId}][${callSid}] ✅ FINAL AI TRANSCRIPT:, finalText`);
-                                        if (!callTranscripts.has(callSid)) {
-                                            callTranscripts.set(callSid, []);
-                                        }
-                                        const transcript = callTranscripts.get(callSid);
-                                        const lastEntry = transcript.length > 0 ? transcript[transcript.length - 1] : null;
-
-                                        if (lastEntry && lastEntry.role === 'assistant') {
-                                            // Overwrite any partial transcript with the final complete one
-                                            lastEntry.text = finalText;
-                                            console.log(`[${connectionId}][${callSid}] Overwrote with final transcript: "${finalText}"`);
-                                        } else {
-                                            // Create new assistant message with final transcript
-                                            transcript.push({ role: 'assistant', text: finalText });
-                                            console.log(`[${connectionId}][${callSid}] Created new assistant message with final transcript`);
-                                        }
-                                    }
-                                    broadcastStatus(callSid, 'AI finished speaking');
-                                    break;
-
-                                case 'response.cancelled':
-                                    console.log(`[${connectionId}][${callSid}] Response cancelled:, JSON.stringify(response, null, 2)`);
-                                    aiSpeaking = false; // AI was interrupted/cancelled
-                                    console.log(`[${connectionId}][${callSid}] ✅ AI RESPONSE CANCELLED - user can interrupt`);
-                                    broadcastStatus(callSid, 'AI response cancelled due to interruption');
-                                    break;
-
-                                default:
-                                    // Log other event types if necessary, already handled by LOG_EVENT_TYPES check above
-                                    break;
+                openAiWs.on('open', () => {
+                    console.log(`[${connectionId}][${callSid}] OpenAI WebSocket connected successfully.`);
+                    console.log(`[${connectionId}][${callSid}] 🎯 INTERRUPTION SYSTEM: VAD configured with threshold=0.6, padding=300ms, silence=800ms`);
+                    // Now that it's open AND we know callSid exists (because setupOpenAI is called after start event),
+                    // send the session update.
+                     if (callSid && callActive) {
+                        setTimeout(sendInitialSessionUpdate, 100);
                     }
-                } catch (error) {
-                            console.error(`[${connectionId}][${callSid}] Error handling OpenAI message:, error.message`);
-                            broadcastStatus(callSid, `Error handling OpenAI message: ${error.message}`);
+                });
+
+                openAiWs.on('message', (data) => {
+                    try {
+                        if (!callSid || !callActive) { console.warn(`[${connectionId}] OpenAI message ignored, call not active.`); return; }
+                        const response = JSON.parse(data);
+
+                        // Log ALL events for debugging
+                        console.log(`[${connectionId}][${callSid}] Received OpenAI event: ${response.type}`);
+
+                        // Log detailed content for transcript-related events
+                        if (response.type.includes('content') || response.type.includes('conversation') || response.type.includes('response')) {
+                            console.log(`[${connectionId}][${callSid}] DETAILED EVENT DATA:, JSON.stringify(response, null, 2)`);
                         }
-                    });
 
-            openAiWs.on('close', () => {
-                        console.log(`[${connectionId}][${callSid}] OpenAI WebSocket closed.`);
-                if (callSid) {
-                            activeWebSockets.delete(callSid);
-                            callActive = false;
-                            broadcastStatus(callSid, 'OpenAI WebSocket closed');
-                }
-            });
+                        // Log the full response if it's an error type
+                        if (response.type === 'error') {
+                            console.error(`[${connectionId}][${callSid}] Received FULL OpenAI error event:, JSON.stringify(response, null, 2)`);
+                        }
 
-            openAiWs.on('error', (error) => {
-                        console.error(`[${connectionId}][${callSid}] OpenAI WebSocket error:, error.message`);
-                    broadcastStatus(callSid, `OpenAI WebSocket error: ${error.message}`);
-                    });
+                        // Log content-related events in detail
+                        if (response.type.includes('content') || response.type.includes('transcript')) {
+                            console.log(`[${connectionId}][${callSid}] CONTENT EVENT DETAILS:, JSON.stringify(response, null, 2)`);
+                        }
 
-                 } catch (error) {
-                    console.error(`[${connectionId}][${callSid}] Error in OpenAI connection setup:, error.message`);
-                    broadcastStatus(callSid, `Error in OpenAI connection setup: ${error.message}`);
-                 }
-            }; // End of setupOpenAIConnection function
+                        if (LOG_EVENT_TYPES.includes(response.type)) {
+                           broadcastStatus(callSid, `OpenAI event: ${response.type}`);
+                        }
 
-        }); // End of websocket handler
-    } catch (error) {
-        console.error(`💥 Error in WebSocket setup: ${error.message}`);
-        console.error(error.stack);
-    }
+                        // Handle different response types
+                        switch (response.type) {
+                            case 'session.updated':
+                                console.log(`[${connectionId}][${callSid}] Session updated. Ready for conversation in ${userLanguage}.`);
+                                broadcastStatus(callSid, 'Session updated - ready for conversation');
+
+                                // Request initial response from OpenAI (no context message needed since metadata is in system prompt)
+                                console.log(`[${connectionId}][${callSid}] Requesting initial response from OpenAI.`);
+                                openAiWs.send(JSON.stringify({
+                                    type: 'response.create',
+                                    response: {
+                                        modalities: ["text", "audio"],
+                                        instructions: "Always provide both text and audio responses. Include the text version of everything you say."
+                                    }
+                                }));
+                                broadcastStatus(callSid, 'Requested initial response');
+                                break;
+
+                            case 'input_audio_buffer.speech_started':
+                                console.log(`[${connectionId}][${callSid}] 🎤 USER STARTED SPEAKING - INTERRUPTING AI RESPONSE`);
+                                userSpeaking = true;
+                                aiSpeaking = false; // AI should stop speaking immediately
+
+                                // Immediately cancel any ongoing AI response
+                                openAiWs.send(JSON.stringify({
+                                    type: 'response.cancel'
+                                }));
+
+                                // Clear the input audio buffer to ensure clean interruption
+                                openAiWs.send(JSON.stringify({
+                                    type: 'input_audio_buffer.clear'
+                                }));
+
+                                // Stop any ongoing audio playback on Twilio side
+                                if (socket && socket.readyState === WebSocket.OPEN) {
+                                    const clearMessage = {
+                                        event: 'clear',
+                                        streamSid: streamSid
+                                    };
+                                    socket.send(JSON.stringify(clearMessage));
+                                }
+
+                                console.log(`[${connectionId}][${callSid}] ✅ Sent response.cancel, buffer.clear, and Twilio clear for interruption`);
+                                broadcastStatus(callSid, 'User interrupted - AI response cancelled');
+                                break;
+
+                            case 'input_audio_buffer.speech_stopped':
+                                console.log(`[${connectionId}][${callSid}] 🎤 USER STOPPED SPEAKING - ready for AI response`);
+                                userSpeaking = false;
+                                broadcastStatus(callSid, 'User finished speaking');
+                                break;
+
+                            case 'conversation.item.created':
+                                console.log(`[${connectionId}][${callSid}] Conversation item created:, JSON.stringify(response.item, null, 2)`);
+
+                                // Handle user messages
+                                if (response.item?.role === 'user' && response.item?.content) {
+                                    const userText = response.item.content
+                                        .filter(c => c.type === 'input_text' || c.type === 'text')
+                                        .map(c => c.text || c.input_text)
+                                        .join(' ');
+
+                                    if (userText && userText.trim()) {
+                                        console.log(`[${connectionId}][${callSid}] Capturing user text:, userText`);
+                                        if (!callTranscripts.has(callSid)) {
+                                            console.log(`[${connectionId}][${callSid}] Creating new transcript array for user input`);
+                                            callTranscripts.set(callSid, []);
+                                        }
+                                        callTranscripts.get(callSid).push({ role: 'user', text: userText });
+                                        console.log(`[${connectionId}][${callSid}] Current transcript length after user input:, callTranscripts.get(callSid).length`);
+                                    }
+                                }
+
+                                // For assistant, we'll rely on response.content_part events to build the text
+                                if (response.item?.role === 'assistant') {
+                                    console.log(`[${connectionId}][${callSid}] Assistant conversation item created. Text will be populated by content_part events.`);
+                                    // No need to add placeholder - content_part.added will handle this
+                                }
+                                break;
+
+                            case 'input_audio_buffer.committed':
+                                console.log(`[${connectionId}][${callSid}] Audio buffer committed - user finished speaking`);
+                                // User finished speaking → ask for AI response with both text and audio
+                                openAiWs.send(JSON.stringify({
+                                    type: 'response.create',
+                                    response: {
+                                        modalities: ['text', 'audio'],
+                                        instructions: 'Always provide both text and audio responses. Include the text version of everything you say.'
+                                    }
+                                }));
+                                console.log(`[${connectionId}][${callSid}] Requested new response with text and audio`);
+                                break;
+
+                            case 'conversation.item.input_audio_transcription.completed':
+                                console.log(`[${connectionId}][${callSid}] User speech transcription completed:, JSON.stringify(response, null, 2)`);
+                                if (response.transcript && response.transcript.trim()) {
+                                    console.log(`[${connectionId}][${callSid}] Capturing user speech transcript:, response.transcript`);
+                                    if (!callTranscripts.has(callSid)) {
+                                        console.log(`[${connectionId}][${callSid}] Creating new transcript array for user speech`);
+                                        callTranscripts.set(callSid, []);
+                                    }
+                                    callTranscripts.get(callSid).push({ role: 'user', text: response.transcript });
+                                    console.log(`[${connectionId}][${callSid}] Current transcript length after user speech:, callTranscripts.get(callSid).length`);
+                                }
+                                break;
+
+                            case 'response.audio.delta':
+                                // ** Handle incoming audio from OpenAI and forward to Twilio **
+                                // Only send audio if user is not currently speaking (to prevent talking over user)
+                                if (response.delta && !userSpeaking) {
+                                    aiSpeaking = true;
+                                    // Ensure the Twilio socket is open before sending
+                                    if (socket && socket.readyState === WebSocket.OPEN) {
+                                        const mediaMessage = {
+                                            event: 'media',
+                                            streamSid: streamSid, // Ensure streamSid is available in this scope
+                                            media: {
+                                                payload: response.delta // OpenAI sends base64 audio
+                                            }
+                                        };
+                                        // Send audio back to Twilio
+                                        socket.send(JSON.stringify(mediaMessage));
+                                    } else {
+                                        console.warn(`[${connectionId}][${callSid}] Twilio socket not open, cannot forward audio.`);
+                                    }
+                                } else if (userSpeaking) {
+                                    console.log(`[${connectionId}][${callSid}] 🚫 Dropping AI audio delta - user is speaking`);
+                                }
+                                break;
+
+                            case 'response.output_item.added':
+                                console.log(`[${connectionId}][${callSid}] Output item added:, JSON.stringify(response, null, 2)`);
+                                // Prepare for incoming text/audio parts when assistant item is added
+                                if (response.output_item && response.output_item.role === 'assistant') {
+                                    console.log(`[${connectionId}][${callSid}] ✅ ASSISTANT OUTPUT ITEM ADDED - preparing for transcript`);
+                                }
+                                break;
+
+                            case 'response.audio_transcript.delta':
+                                console.log(`[${connectionId}][${callSid}] Audio transcript delta:, JSON.stringify(response, null, 2)`);
+                                const transcriptPart = response.delta?.transcript;
+                                if (transcriptPart?.trim()) {
+                                    console.log(`[${connectionId}][${callSid}] ✅ REAL AI TRANSCRIPT DELTA:, transcriptPart`);
+                                    if (!callTranscripts.has(callSid)) {
+                                        callTranscripts.set(callSid, []);
+                                    }
+                                    const transcript = callTranscripts.get(callSid);
+                                    const lastEntry = transcript.length > 0 ? transcript[transcript.length - 1] : null;
+
+                                    if (lastEntry && lastEntry.role === 'assistant') {
+                                        // Append to existing assistant message
+                                        lastEntry.text += transcriptPart;
+                                        console.log(`[${connectionId}][${callSid}] Appended transcript delta. Total length: ${lastEntry.text.length}`);
+                                    } else {
+                                        // Create new assistant message
+                                        transcript.push({ role: 'assistant', text: transcriptPart });
+                                        console.log(`[${connectionId}][${callSid}] Created new assistant message with transcript delta`);
+                                    }
+                                }
+                                break;
+
+                            case 'response.audio_transcript.done':
+                                console.log(`[${connectionId}][${callSid}] Audio transcript done:, JSON.stringify(response, null, 2)`);
+                                console.log(`[${connectionId}][${callSid}] ✅ ASSISTANT AUDIO TRANSCRIPT COMPLETE`);
+                                break;
+
+                            case 'response.done':
+                                console.log(`[${connectionId}][${callSid}] Response done:, JSON.stringify(response, null, 2)`);
+                                aiSpeaking = false; // AI finished speaking
+
+                                // Pull the final transcript from response.done
+                                const items = response.response?.output || [];
+                                const assistantItem = items.find(i => i.role === 'assistant');
+                                const finalText = assistantItem?.content?.[0]?.transcript;
+                                if (finalText?.trim()) {
+                                    console.log(`[${connectionId}][${callSid}] ✅ FINAL AI TRANSCRIPT:, finalText`);
+                                    if (!callTranscripts.has(callSid)) {
+                                        callTranscripts.set(callSid, []);
+                                    }
+                                    const transcript = callTranscripts.get(callSid);
+                                    const lastEntry = transcript.length > 0 ? transcript[transcript.length - 1] : null;
+
+                                    if (lastEntry && lastEntry.role === 'assistant') {
+                                        // Overwrite any partial transcript with the final complete one
+                                        lastEntry.text = finalText;
+                                        console.log(`[${connectionId}][${callSid}] Overwrote with final transcript: "${finalText}"`);
+                                    } else {
+                                        // Create new assistant message with final transcript
+                                        transcript.push({ role: 'assistant', text: finalText });
+                                        console.log(`[${connectionId}][${callSid}] Created new assistant message with final transcript`);
+                                    }
+                                }
+                                broadcastStatus(callSid, 'AI finished speaking');
+                                break;
+
+                            case 'response.cancelled':
+                                console.log(`[${connectionId}][${callSid}] Response cancelled:, JSON.stringify(response, null, 2)`);
+                                aiSpeaking = false; // AI was interrupted/cancelled
+                                console.log(`[${connectionId}][${callSid}] ✅ AI RESPONSE CANCELLED - user can interrupt`);
+                                broadcastStatus(callSid, 'AI response cancelled due to interruption');
+                                break;
+
+                            default:
+                                // Log other event types if necessary, already handled by LOG_EVENT_TYPES check above
+                                break;
+                        }
+                    } catch (error) {
+                                console.error(`[${connectionId}][${callSid}] Error handling OpenAI message:, error.message`);
+                                broadcastStatus(callSid, `Error handling OpenAI message: ${error.message}`);
+                            }
+                        });
+
+                openAiWs.on('close', () => {
+                            console.log(`[${connectionId}][${callSid}] OpenAI WebSocket closed.`);
+                    if (callSid) {
+                                activeWebSockets.delete(callSid);
+                                callActive = false;
+                                broadcastStatus(callSid, 'OpenAI WebSocket closed');
+                    }
+                });
+
+                openAiWs.on('error', (error) => {
+                            console.error(`[${connectionId}][${callSid}] OpenAI WebSocket error:, error.message`);
+                        broadcastStatus(callSid, `OpenAI WebSocket error: ${error.message}`);
+                        });
+
+                     } catch (error) {
+                        console.error(`[${connectionId}][${callSid}] Error in OpenAI connection setup:, error.message`);
+                        broadcastStatus(callSid, `Error in OpenAI connection setup: ${error.message}`);
+                     }
+                }; // End of setupOpenAIConnection function
+
+    }); // End of websocket handler
 });
 
 // WebSocket route for status monitoring
@@ -1030,81 +967,6 @@ function generateTwiML(language) {
 }
 
 // Generate TwiML for the call (Reads language from query)
-fastify.post('/webhook/call', async (request, reply) => {
-  const startTime = Date.now();
-  console.log('📞 ========== INCOMING WEBHOOK FOR FELIX DEMO CALL ==========');
-  console.log(`⏰ Timestamp: ${new Date().toISOString()}`);
-  console.log('📋 Request headers:', JSON.stringify(request.headers, null, 2));
-  console.log('📋 Request body:', JSON.stringify(request.body, null, 2));
-  console.log('🌐 Request URL:', request.url);
-  console.log('🔧 Request method:', request.method);
-  
-  try {
-    const callSid = request.body?.CallSid;
-    console.log(`🎯 Extracted Call SID: ${callSid}`);
-    console.log(`🌐 Using domain: ${DOMAIN}`);
-    console.log(`📱 Phone number from: ${PHONE_NUMBER_FROM}`);
-    console.log(`🤖 OpenAI API key configured: ${!!OPENAI_API_KEY}`);
-    
-    if (!callSid) {
-      console.error('❌ CRITICAL: No CallSid provided in webhook');
-      const errorTwiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Say>Call configuration error. Please contact support.</Say>
-</Response>`;
-      console.log('📤 Sending error TwiML:', errorTwiml);
-      return reply.status(400).header('Content-Type', 'text/xml').send(errorTwiml);
-    }
-    
-    // Get metadata for this call
-    const metadata = callMetadata.get(callSid) || {};
-    console.log(`📋 Retrieved metadata for ${callSid}:`, JSON.stringify(metadata, null, 2));
-    
-    // Update call status
-    if (callDatabase[callSid]) {
-        callDatabase[callSid].status = 'in-progress';
-        callDatabase[callSid].startTime = new Date().toISOString();
-        console.log(`✅ Updated call status for ${callSid} to in-progress`);
-    } else {
-        console.log(`⚠️ WARNING: No call data found for ${callSid} in callDatabase`);
-        console.log(`💾 Current callDatabase keys:`, Object.keys(callDatabase));
-    }
-    
-    // Generate TwiML to connect to media stream using dynamic domain
-    const streamUrl = `wss://${DOMAIN}/media-stream`;
-    console.log(`🔗 Generated stream URL: ${streamUrl}`);
-    
-    const twiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Connect>
-    <Stream url="${streamUrl}" track="both">
-      <Parameter name="callSid" value="${callSid}"/>
-      <Parameter name="language" value="en-US"/>
-    </Stream>
-  </Connect>
-</Response>`;
-    
-    console.log(`📤 Generated TwiML for Felix:`, twiml);
-    console.log(`⏱️ Webhook processing time: ${Date.now() - startTime}ms`);
-    console.log('✅ Sending successful TwiML response');
-    
-    reply.header('Content-Type', 'text/xml');
-    return twiml;
-  } catch (error) {
-    console.error('❌ CRITICAL ERROR in webhook/call endpoint:', error);
-    console.error('📍 Error stack:', error.stack);
-    console.error(`⏱️ Failed after: ${Date.now() - startTime}ms`);
-    
-    const errorTwiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Say>Sorry, there was an error with the call. Please try again later.</Say>
-</Response>`;
-    console.log('📤 Sending error TwiML due to exception:', errorTwiml);
-    return reply.status(500).header('Content-Type', 'text/xml').send(errorTwiml);
-  }
-});
-
-// Legacy TwiML endpoint (keeping for backward compatibility)
 fastify.post('/twiml', async (request, reply) => {
   console.log('>>> TwiML endpoint hit <<<');
   try {
