@@ -257,9 +257,41 @@ async function makeCall(phoneNumber, metadata = {}) {
 }
 
 // Initialize Fastify
-const fastify = Fastify();
+const fastify = Fastify({
+    logger: {
+        level: 'info',
+        serializers: {
+            req: (req) => {
+                return {
+                    method: req.method,
+                    url: req.url,
+                    headers: req.headers,
+                    remoteAddress: req.ip,
+                    remotePort: req.socket?.remotePort
+                }
+            }
+        }
+    }
+});
+
 fastify.register(fastifyFormBody);
-fastify.register(fastifyWs);
+
+// Register WebSocket plugin with explicit configuration
+fastify.register(fastifyWs, {
+    options: {
+        maxPayload: 1048576,
+        verifyClient: (info, next) => {
+            console.log(`🔍 WebSocket upgrade request from ${info.req.socket.remoteAddress}:${info.req.socket.remotePort}`);
+            console.log(`🔍 Headers:`, JSON.stringify(info.req.headers, null, 2));
+            console.log(`🔍 Origin: ${info.origin || 'No origin'}`);
+            console.log(`🔍 Secure: ${info.secure}`);
+            console.log(`🔍 URL: ${info.req.url}`);
+            
+            // Always allow connections but log for debugging
+            next(true);
+        }
+    }
+});
 
 // Add CORS support for all routes
 fastify.addHook('onRequest', async (request, reply) => {
@@ -307,6 +339,22 @@ fastify.get('/test-websocket', async (request, reply) => {
         domain: DOMAIN,
         message: 'Use this URL to test WebSocket connectivity'
     };
+});
+
+// WebSocket connectivity test endpoint - this will return 400 when accessed via HTTP but proves the route exists
+fastify.get('/media-stream', async (request, reply) => {
+    const upgradeHeader = request.headers['upgrade'];
+    if (upgradeHeader !== 'websocket') {
+        console.log(`❌ HTTP request to WebSocket endpoint from ${request.ip}`);
+        console.log(`📋 Headers:`, JSON.stringify(request.headers, null, 2));
+        return reply.status(400).send({
+            error: 'This endpoint requires WebSocket upgrade',
+            message: 'Use wss:// protocol to connect to this endpoint',
+            websocketUrl: `wss://${DOMAIN}/media-stream`
+        });
+    }
+    // This shouldn't be reached as WebSocket upgrade should be handled by the plugin
+    return reply.status(400).send({ error: 'WebSocket upgrade failed' });
 });
 
 // WebSocket route for media-stream
@@ -1340,12 +1388,23 @@ fastify.options('/api/call/status/:callSid', async (request, reply) => {
 });
 
 // Initialize server
-fastify.listen({ port: PORT, host: '0.0.0.0' }, (err) => {
+fastify.listen({ 
+    port: PORT, 
+    host: '0.0.0.0',
+    backlog: 511,
+    listenTextResolver: (address) => {
+        return `🚀 Felix AI Demo System Started Successfully!\n📍 Server listening at: ${address}\n🔗 WebSocket endpoint: wss://${DOMAIN}/media-stream\n📊 Dashboard: ${address}/dashboard.html`;
+    }
+}, (err, address) => {
     if (err) {
-        console.error('Error starting server:', err);
+        console.error('💥 Error starting server:', err);
         process.exit(1);
     }
-    console.log(`Server is listening on port ${PORT}`);
+    console.log(`🚀 Felix AI Demo System Started Successfully!`);
+    console.log(`📍 Server listening at: ${address}`);
+    console.log(`🔗 WebSocket endpoint: wss://${DOMAIN}/media-stream`);
+    console.log(`📊 Dashboard: ${address}/dashboard.html`);
+    console.log(`🔧 Registering WebSocket route /media-stream...`);
 
     // Parse command-line arguments to get the phone number
     const args = process.argv.slice(2);
