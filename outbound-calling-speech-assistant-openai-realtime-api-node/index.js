@@ -364,14 +364,14 @@ fastify.register(async (fastify) => {
                         type: 'server_vad',
                         threshold: 0.5,
                         prefix_padding_ms: 300,
-                        silence_duration_ms: 600
+                        silence_duration_ms: 500
                     },
                     input_audio_format: 'g711_ulaw',
                     output_audio_format: 'g711_ulaw',
                     voice: VOICE,
                     instructions: systemMessage,
                     modalities: ["text", "audio"],
-                    temperature: 1.0,
+                    temperature: 0.7,
                     input_audio_transcription: {
                         model: "whisper-1"
                     },
