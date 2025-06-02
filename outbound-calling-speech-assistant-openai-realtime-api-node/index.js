@@ -1127,7 +1127,7 @@ fastify.post('/api/call', async (request, reply) => {
     
     // Validate required fields
     if (!firstName || !phoneNumber || !company || !jobTitle) {
-        return reply.status(400).json({ 
+        return reply.status(400).send({ 
             error: 'Missing required fields: firstName, phoneNumber, company, and jobTitle are required' 
         });
     }
@@ -1157,7 +1157,7 @@ fastify.post('/api/call', async (request, reply) => {
     
     console.log(`✅ Felix demo call initiated successfully. Call SID: ${callSid}`);
     
-    reply.json({
+    return reply.send({
         success: true,
         sid: callSid,
         status: 'queued',
@@ -1166,7 +1166,7 @@ fastify.post('/api/call', async (request, reply) => {
     
   } catch (error) {
     console.error('❌ Error initiating call:', error);
-    reply.status(500).json({ 
+    return reply.status(500).send({ 
         error: 'Failed to initiate call',
         details: error.message 
     });
@@ -1178,7 +1178,7 @@ fastify.get('/api/call/status/:callSid', async (request, reply) => {
   const { callSid } = request.params;
   
   if (!callSid) {
-    return reply.status(400).json({ error: 'Call SID is required' });
+    return reply.status(400).send({ error: 'Call SID is required' });
   }
   
   try {
@@ -1186,7 +1186,7 @@ fastify.get('/api/call/status/:callSid', async (request, reply) => {
     const localCallData = callDatabase[callSid];
     
     if (localCallData) {
-      return reply.json({
+      return reply.send({
         sid: localCallData.sid,
         status: localCallData.status,
         contactInfo: localCallData.contactInfo,
@@ -1199,7 +1199,7 @@ fastify.get('/api/call/status/:callSid', async (request, reply) => {
     
     // If not found locally, check Twilio
     const call = await client.calls(callSid).fetch();
-    return reply.json({
+    return reply.send({
       sid: call.sid,
       status: call.status,
       contactInfo: 'N/A',
@@ -1210,7 +1210,7 @@ fastify.get('/api/call/status/:callSid', async (request, reply) => {
     });
   } catch (error) {
     console.error('❌ Error fetching call status:', error);
-    return reply.status(404).json({ error: 'Call not found or invalid Call ID' });
+    return reply.status(404).send({ error: 'Call not found or invalid Call ID' });
   }
 });
 

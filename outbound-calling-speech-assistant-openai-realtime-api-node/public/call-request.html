@@ -211,9 +211,9 @@
             </div>
             
             <div class="form-group">
-                <label for="phoneNumber">Phone Number *</label>
-                <input type="tel" id="phoneNumber" name="phoneNumber" placeholder="+1 (555) 555-5555" required>
-                <small>Please include the country code (e.g., +1 for US)</small>
+                <label for="phoneNumber">Phone Number (with country code) *</label>
+                <input type="tel" id="phoneNumber" name="phoneNumber" placeholder="+1 (555) 123-4567 or +45 12 34 56 78" required>
+                <small>Include country code (e.g., +1 for US, +45 for Denmark, +44 for UK)</small>
             </div>
             
             <div class="form-group">
@@ -320,16 +320,23 @@
             // Auto-format phone number
             const phoneInput = document.getElementById('phoneNumber');
             phoneInput.addEventListener('input', function(e) {
-                let value = e.target.value.replace(/\D/g, '');
-                if (value.length > 0 && !value.startsWith('1')) {
-                    value = '1' + value;
+                // Remove any non-digits except + at the start
+                let value = e.target.value;
+                
+                // Allow + at the beginning, then only digits, spaces, parentheses, and dashes
+                value = value.replace(/[^\+\d\s\(\)\-]/g, '');
+                
+                // Ensure + only appears at the beginning
+                if (value.indexOf('+') > 0) {
+                    value = value.replace(/\+/g, '');
+                    value = '+' + value;
                 }
-                if (value.length >= 11) {
-                    value = value.substring(0, 11);
-                    const formatted = `+${value.substring(0, 1)} (${value.substring(1, 4)}) ${value.substring(4, 7)}-${value.substring(7)}`;
-                    e.target.value = formatted;
-                }
+                
+                e.target.value = value;
             });
+            
+            // Add placeholder text to help users
+            phoneInput.placeholder = "+1 (555) 123-4567 or +45 12 34 56 78";
             
             // Call Request Form
             const callForm = document.getElementById('callForm');
@@ -352,7 +359,10 @@
                 const data = Object.fromEntries(formData.entries());
                 
                 try {
-                    const response = await fetch('https://sales-agent-76jb.onrender.com/api/call', {
+                    // For local testing - switch to localhost
+                    const response = await fetch('http://localhost:6060/api/call', {
+                    // For production - use this instead:
+                    // const response = await fetch('https://sales-agent-76jb.onrender.com/api/call', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
@@ -421,7 +431,10 @@
                 statusCallDetails.style.display = 'none';
                 
                 try {
-                    const response = await fetch(`https://sales-agent-76jb.onrender.com/api/call/status/${callSid}`);
+                    // For local testing - switch to localhost
+                    const response = await fetch(`http://localhost:6060/api/call/status/${callSid}`);
+                    // For production - use this instead:
+                    // const response = await fetch(`https://sales-agent-76jb.onrender.com/api/call/status/${callSid}`);
                     const result = await response.json();
                     
                     if (response.ok) {
