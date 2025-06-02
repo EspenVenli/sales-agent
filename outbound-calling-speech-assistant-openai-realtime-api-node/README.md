@@ -1,229 +1,217 @@
-# AI Phone Agent
+# Sales Agent AI Calling System
 
-This application enables making outbound phone calls with an AI assistant that can have natural conversations using OpenAI's Realtime API and Twilio.
-
-## Deployment to Vercel
-
-1. Install Vercel CLI:
-```bash
-npm i -g vercel
-```
-
-2. Login to Vercel:
-```bash
-vercel login
-```
-
-3. Deploy to Vercel:
-```bash
-vercel
-```
-
-4. Set up environment variables in Vercel:
-- Go to your project settings in the Vercel dashboard
-- Add the following environment variables:
-  - `TWILIO_ACCOUNT_SID`
-  - `TWILIO_AUTH_TOKEN`
-  - `PHONE_NUMBER_FROM`
-  - `DOMAIN` (your Vercel deployment URL)
-  - `OPENAI_API_KEY`
-  - `N8N_WEBHOOK_URL`
-
-5. Update your Twilio webhook URLs to point to your Vercel deployment URL.
-
-## Local Development
-
-1. Install dependencies:
-```bash
-npm install
-```
-
-2. Create a `.env` file with the required environment variables.
-
-3. Start the development server:
-```bash
-npm run dev
-```
+An AI-powered sales agent that can make outbound calls to prospects using OpenAI's Realtime API and Twilio. The system includes a web interface for scheduling calls with comprehensive prospect information and a dashboard for monitoring call activity.
 
 ## Features
 
-- Real-time voice conversations using OpenAI's Realtime API
-- WebSocket-based media streaming
-- Call status monitoring dashboard
-- Transcript generation and storage
-- Integration with n8n for workflow automation
+- 🎯 **AI Sales Agent**: Professional sales conversations using OpenAI's advanced voice model
+- 📊 **Lead Management**: Comprehensive form for capturing prospect information
+- 📞 **Outbound Calling**: Automated calling system using Twilio
+- 📈 **Real-time Dashboard**: Monitor active calls and conversion rates
+- 🔄 **Call Status Tracking**: Real-time updates on call progress
+- 📝 **Lead Qualification**: AI agent designed to qualify leads and schedule demos
+- 🌐 **Web Interface**: Modern, responsive UI for sales teams
 
-## Requirements
+## Sales Agent Capabilities
 
-- Node.js >= 18.0.0
-- Twilio account with voice capabilities
-- OpenAI API key
-- n8n instance (optional)
-
-## License
-
-ISC
+The AI sales agent is designed to:
+- Introduce themselves professionally
+- Qualify prospects based on provided context
+- Ask discovery questions about business challenges
+- Present value propositions based on prospect needs
+- Schedule product demonstrations
+- Handle objections professionally
+- Maintain conversation flow and rapport
 
 ## Prerequisites
 
-- Node.js v18 or later
-- A Twilio account with a phone number
-- An OpenAI API key with access to the Realtime API
-- ngrok or a similar service for exposing your local server to the internet
+- **Node.js 18+**
+- **Twilio Account** with Phone Number
+- **OpenAI API Key** with Realtime API access
+- **ngrok** or similar for local development (optional)
 
-## Setup
+## Environment Setup
 
-1. Clone the repository
-2. Install dependencies:
-   ```
-   npm install
-   ```
-3. Create a `.env` file with your credentials:
-   ```
-   TWILIO_ACCOUNT_SID="your_twilio_account_sid"
-   TWILIO_AUTH_TOKEN="your_twilio_auth_token"
-   PHONE_NUMBER_FROM="your_twilio_phone_number"
-   DOMAIN="your_ngrok_domain" (without protocol or trailing slash)
-   OPENAI_API_KEY="your_openai_api_key"
-   ```
-
-## Running the Application
-
-1. Start ngrok to expose your local server:
-   ```
-   ngrok http 6060
-   ```
-
-2. Update the `DOMAIN` variable in your `.env` file with the ngrok URL (without `https://` or trailing slash).
-
-3. Start the server:
-   ```
-   npm start
-   ```
-
-## Making a Call
-
-You can make a call in two ways:
-
-### 1. Using the /call API endpoint
-
-Send a POST request to the `/call` endpoint:
-
-```
-curl -X POST http://localhost:6060/call \
-  -H "Content-Type: application/json" \
-  -d '{"phoneNumberTo": "+1234567890", "promptText": "You are a friendly AI assistant calling to check in."}'
+1. **Clone and Install**
+```bash
+cd outbound-calling-speech-assistant-openai-realtime-api-node
+npm install
 ```
 
-### 2. Using the makeCall function directly
+2. **Configure Environment Variables**
+```bash
+cp .env.example .env
+```
 
-If you want to test calls programmatically, you can modify the code to call the `makeCall` function:
+Edit `.env` with your credentials:
+```env
+# Twilio Credentials
+TWILIO_ACCOUNT_SID=your_twilio_account_sid_here
+TWILIO_AUTH_TOKEN=your_twilio_auth_token_here
+PHONE_NUMBER_FROM=+1234567890
+
+# OpenAI API Key
+OPENAI_API_KEY=your_openai_api_key_here
+
+# Server Configuration
+DOMAIN=localhost:6060
+PORT=6060
+
+# Optional Webhooks (for lead management integrations)
+N8N_WEBHOOK_URL=
+N8N_EMAIL_WEBHOOK_URL=
+```
+
+## Running Locally
+
+### Start the Server
+```bash
+npm start
+```
+
+The server will start on http://localhost:6060
+
+### Access the Interface
+- **Sales Dashboard**: http://localhost:6060/
+- **Schedule New Call**: http://localhost:6060/call-request.html
+
+## Usage
+
+### Scheduling a Sales Call
+
+1. **Go to the call request form**: http://localhost:6060/call-request.html
+
+2. **Fill out prospect information**:
+   - Basic info (name, phone, email, company)
+   - Company details (industry, size, job title)
+   - Sales context (pain points, budget, timeline)
+   - Call objective and previous contact history
+
+3. **Submit the form** to initiate the call
+
+4. **Monitor progress** on the dashboard
+
+### Sales Form Fields
+
+**Required:**
+- First Name & Last Name
+- Phone Number (with country code)
+- Company Name
+- Industry
+
+**Optional but Recommended:**
+- Job Title
+- Company Size
+- Lead Source
+- Pain Points
+- Budget Range
+- Decision Timeline
+- Previous Contact History
+- Call Objective
+- Additional Notes
+
+### Call Priorities
+
+- 🔥 **High Priority (Hot)**: Urgent prospects, immediate attention
+- ⚡ **Medium Priority (Warm)**: Standard lead processing
+- ❄️ **Low Priority (Cold)**: Lower priority, basic qualification
+
+## API Endpoints
+
+### Sales Call Management
+- `POST /api/call` - Schedule a new sales call
+- `GET /api/call/status/{callSid}` - Get call status
+- `GET /` - Sales dashboard
+- `GET /call-request.html` - Call request form
+
+### Legacy Endpoints (for compatibility)
+- `POST /make-call` - Original call endpoint
+- `GET /status/{callSid}` - Original status endpoint
+
+## Dashboard Features
+
+- **Real-time call monitoring**
+- **Conversion rate tracking**
+- **Active call management**
+- **Call history and logs**
+- **Performance metrics**
+
+## Sales Agent Personality
+
+The AI agent (Alex) is configured to:
+- Be professional but personable
+- Build rapport naturally
+- Ask discovery questions
+- Listen actively to prospect needs
+- Present relevant value propositions
+- Schedule demos as the primary goal
+- Handle objections respectfully
+- End calls politely if not interested
+
+## Phone Number Allowlist
+
+For compliance and testing, the system includes a phone number allowlist in the code. Update the `isNumberAllowed()` function to include your test numbers:
 
 ```javascript
-makeCall('+1234567890');
+global.allowedNumbers = {
+  "+1234567890": true,  // Add your numbers here
+  "+0987654321": true,
+};
 ```
 
-For security reasons, you can only call phone numbers that are:
-- Verified as outgoing caller IDs in your Twilio account
-- Phone numbers owned by your Twilio account
+## Webhooks & Integrations
 
-## Checking Call Status
+The system supports optional webhook integrations for:
+- **Lead data processing** (N8N_EMAIL_WEBHOOK_URL)
+- **Call transcript analysis** (N8N_WEBHOOK_URL)
 
-To check the status of a call, send a GET request to the `/status/:callSid` endpoint:
+## Compliance Notes
 
+⚠️ **Important**: Always disclose the use of AI for outbound calls. All TCPA rules apply even when calls are made by AI. Consult with your legal counsel for compliance advice.
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Calls not connecting**
+   - Check phone number is in allowlist
+   - Verify Twilio credentials
+   - Ensure phone number format includes country code
+
+2. **OpenAI connection fails**
+   - Verify API key has Realtime API access
+   - Check internet connection
+   - Review console logs for specific errors
+
+3. **Dashboard not updating**
+   - Check WebSocket connection in browser console
+   - Verify server is running on correct port
+   - Refresh the page
+
+### Debug Mode
+
+Enable detailed logging by checking the server console output. All events are logged with timestamps and call SIDs for troubleshooting.
+
+## Development
+
+### Project Structure
 ```
-curl http://localhost:6060/status/CA123456789abcdef
+├── public/                 # Frontend files
+│   ├── dashboard.html     # Sales dashboard
+│   ├── call-request.html  # Call scheduling form
+│   └── index.html         # Redirect to dashboard
+├── index.js               # Main server file
+├── package.json           # Dependencies
+└── README.md             # This file
 ```
 
-## How It Works
+### Making Changes
 
-1. The application uses Twilio to make outbound calls
-2. When the call is answered, a WebSocket connection is established between Twilio and our server
-3. Another WebSocket connection is established between our server and OpenAI's Realtime API
-4. Audio from the call is streamed to OpenAI for processing in real-time
-5. OpenAI processes the audio and generates responses on the fly
-6. The responses are converted to speech and streamed back to the call
+1. **Frontend changes**: Edit files in `public/` directory
+2. **Backend changes**: Modify `index.js`
+3. **Sales agent personality**: Update `buildSystemMessage()` function
+4. **Form fields**: Modify `call-request.html`
 
-## Features
+## License
 
-- Outbound calling using Twilio
-- Real-time audio streaming and processing
-- OpenAI GPT-4o Realtime API integration for natural conversations
-- Customizable AI prompts
-- Server-side Voice Activity Detection (VAD)
-- WebSocket-based bidirectional communication
-- Voice customization (currently using 'alloy')
-
-## Customization
-
-You can customize the AI's behavior by:
-1. Modifying the `SYSTEM_MESSAGE` constant in `index.js`
-2. Providing a custom prompt when making a call
-3. Changing the `VOICE` constant to use different OpenAI voices
-4. Adjusting the temperature setting in the session.update message
-
-## Visualizing the Call Connection
-
-The application includes a real-time dashboard that allows you to visualize the call connection and conversation flow. To access the dashboard:
-
-1. Open your browser and navigate to `http://localhost:6060` or your ngrok URL
-2. The dashboard shows:
-   - Active and completed calls
-   - Real-time connection status
-   - Events from OpenAI and Twilio
-   - Conversation logs including AI responses
-
-The dashboard uses WebSockets to display real-time updates, allowing you to monitor:
-- When calls connect
-- The flow of conversation between the caller and AI
-- OpenAI events and responses
-- Any errors that occur during the call
-
-This is particularly useful for debugging and understanding how the communication between Twilio, your server, and OpenAI works.
-
-## WebSocket Implementation Details
-
-The application uses a dual WebSocket architecture:
-
-1. **Twilio Media WebSocket**: Twilio connects to our `/media-stream` endpoint to send and receive audio.
-
-2. **OpenAI Realtime WebSocket**: Our server connects to OpenAI's Realtime API at `wss://api.openai.com/v1/realtime`.
-
-The communication flow works like this:
-
-1. When a call is answered, Twilio establishes a WebSocket connection to our server.
-2. Our server connects to OpenAI's Realtime API and establishes a session.
-3. We send an initial greeting prompt to OpenAI to start the conversation.
-4. Audio from the caller is sent from Twilio to our server using `media` events.
-5. We forward this audio to OpenAI using `input_audio_buffer.append` messages.
-6. OpenAI sends back audio responses as `response.audio.delta` events.
-7. We forward these responses back to Twilio to be played to the caller.
-
-### Important API Events
-
-- **From Twilio**:
-  - `start`: Indicates the beginning of a media stream
-  - `media`: Contains audio data from the caller
-  - `stop`: Indicates the end of the connection
-
-- **To OpenAI**:
-  - `session.update`: Sets parameters like voice, audio format, and system instructions
-  - `conversation.item.create`: Creates a new message in the conversation
-  - `input_audio_buffer.append`: Sends audio data from the caller
-  - `response.create`: Requests a response from the assistant
-
-- **From OpenAI**:
-  - `session.updated`: Confirms session parameters were applied
-  - `response.audio.delta`: Contains chunks of audio response
-  - Various events for turn taking and audio processing
-
-## Note
-
-This implementation uses OpenAI's latest Realtime API which provides better conversation handling with minimal latency. In a production environment, you would need to implement:
-
-1. Robust error handling and reconnection logic
-2. User authentication and authorization
-3. Rate limiting and billing management
-4. Call recording and logging (with proper consent)
-5. Analytics and conversation tracking
-6. Fallback mechanisms for handling API outages 
+This project is provided as-is for educational and development purposes. Please ensure compliance with all applicable laws and regulations when using for commercial purposes. 

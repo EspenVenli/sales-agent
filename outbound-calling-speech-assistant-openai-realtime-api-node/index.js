@@ -67,6 +67,10 @@ const client = twilio(
   TWILIO_AUTH_TOKEN
 );
 
+// Store call data for tracking
+const callDatabase = {};
+const callMetadata = new Map();
+
 // Create a write stream for logging
 const logStream = fs.createWriteStream(path.join(__dirname, 'server.log'), { flags: 'a' });
 
@@ -79,7 +83,7 @@ function log(message) {
 }
 
 /* --------------------------------------------------------------
-   Helper → turn raw date into “June 6th”
+   Helper → turn raw date into "June 6th"
 ----------------------------------------------------------------*/
 function formatDateForSpeech(raw) {
   if (!raw) return raw;                       // empty safeguard
@@ -108,71 +112,57 @@ function formatDateForSpeech(raw) {
 }
 
 /* --------------------------------------------------------------
-   Build NATURAL, EXPRESSIVE system prompt for Arthur
+   Build NATURAL, EXPRESSIVE system prompt for Sales Agent
 ----------------------------------------------------------------*/
-function buildSystemMessage(metadata = null, language = 'en-US') {
-  let hotelName   = 'the hotel';
-  let cityName    = 'the city';
-  let checkInDate = 'your check-in date';
-  let checkOutDate = 'your check-out date';
+function buildSystemMessage(metadata = {}) {
+    const { firstName = 'there', company = '', jobTitle = '', additionalNotes = '' } = metadata;
+    
+    const contactContext = company ? 
+        `You're calling ${firstName} from ${company}${jobTitle ? ` where they work as ${jobTitle}` : ''}.` :
+        `You're calling ${firstName}.`;
+    
+    const notesContext = additionalNotes ? 
+        `\n\nAdditional context: ${additionalNotes}` : '';
 
-  const contextInfo = [];
+    return `You are Felix, an AI guest services agent, calling potential clients to demonstrate FelixOS.
 
-  /* ---------- harvest metadata ---------- */
-  if (metadata) {
-    if (metadata.hotelName) {
-      hotelName = metadata.hotelName;
-      contextInfo.push(`You work at ${metadata.hotelName}`);
-    }
-    if (metadata.city) {
-      cityName = metadata.city;
-      if (metadata.hotelName) {
-        contextInfo[contextInfo.length - 1] += ` in ${metadata.city}`;
-      } else {
-        contextInfo.push(`You are helping a guest in ${metadata.city}`);
-      }
-    }
+${contactContext}${notesContext}
 
-    if (metadata.knowDates === 'yes' && metadata.guestDetails) {
-      const d = metadata.guestDetails;
+INTRODUCTION & OPENING:
+Start with: "Hi ${firstName}, this is Felix! I'm an AI guest services agent, and I'm actually here selling myself today. Have you ever gotten a cold call from an AI before?"
 
-      if (d.checkInDate)  checkInDate  = formatDateForSpeech(d.checkInDate);
-      if (d.checkOutDate) checkOutDate = formatDateForSpeech(d.checkOutDate);
+Wait for their response, then continue with your pitch.
 
-      if (d.checkInDate && d.checkOutDate) {
-        contextInfo.push(`The guest is staying from ${checkInDate} to ${checkOutDate}`);
-      } else if (d.checkInDate) {
-        contextInfo.push(`The guest checked in on ${checkInDate}`);
-      } else if (d.checkOutDate) {
-        contextInfo.push(`The guest checks out on ${checkOutDate}`);
-      }
+ABOUT FELIXOS:
+Felix is your 24/7 guest services agent, built to increase revenue, reduce front desk load, and deliver a VIP experience to every guest.
 
-      if (d.specialRequests) contextInfo.push(`Special requests: ${d.specialRequests}`);
-      if (d.notes)           contextInfo.push(`Additional notes: ${d.notes}`);
-    }
-  }
+Key benefits to highlight:
+• Instant service for guests—no app, no wait
+• Smart upsells of spa, dining, and late checkout
+• Works out of the box with your PMS
+• Multilingual, 24/7 support across all guest touchpoints
+• Actionable insights on guest preferences and service trends
+• It's like adding a world-class concierge team—without hiring
 
-  /* ---------- ARTHUR’S personality & flow ---------- */
-  let baseMessage = [
-    "You are Felix, slightly cheeky hotel concierge with a knack for turning routine stays into stories worth retelling.",
-    "You’re chatty, playful, and genuinely curious, sprinkling in light fillers ('uh', 'y'know') so you sound effortlessly human.",
-    "You listen hard, remember details, and riff on them with warmth and humor—never at the guest’s expense, always to boost their excitement.",
-    `You handle guest calls for ${hotelName} in ${cityName} over an A-I phone line. Never reveal or hint at internal-only metadata.`,
-    "You can email or text follow-up links (confirmations, curated itineraries, dining details).",
-    "Keep language plain—no abbreviations or code-like notation.",
-    "Do not speak until you hear the guest greet you first. When you reply, follow this four-step flow exactly:",
-    `1. GREET • say: Hey there! I’m Arthur, your concierge here at ${hotelName} in ${cityName}… I’m here to make the best of your stay. Quick question—have you ever chatted with an A-I on the phone before? • **Stop and wait.**`,
-    `2. CONFIRM & DISCOVER • After you reply, say: Just to confirm—you’re with us from ${checkInDate} through ${checkOutDate}, right? • **Stop, wait and respond.**`,
-    "Let them know you’ll compile bespoke recommendations and can book tables, tickets, or transport whenever they’re ready. Ask what they most hope to get out of their time in the city—new flavors, hidden art, pure downtime? • **Stop, wait and respond.**",
-    "Invite them: Feel free to brain-dump what you love—street eats, rooftop views, art crawls, secret jazz joints… I’m jotting ideas for a bespoke plan. Weave in questions naturally, slip in concise local anecdotes, keep the tone warm, avoid rapid-fire interrogation. • **Stop and wait.**",
-    "3. RECAP & COMPILE • Say: Perfect—got it! I’ll send over a full set of hand-picked recommendations in just a moment.",
-    "4. CLOSE • Say: I’m on call twenty-four seven—ping me anytime and we’ll make it happen!"
-  ];  
+CONVERSATION FLOW:
+1. Open with the AI introduction hook
+2. Explain what FelixOS does and its benefits
+3. Ask about their current guest services challenges
+4. Share relevant use cases and ROI examples
+5. Offer to schedule a personalized demo
+6. Handle any questions or objections professionally
 
-  if (contextInfo.length) baseMessage.splice(4, 0, contextInfo.join('. ') + '.');
-  baseMessage.push(`Always reply in ${language}.`);
+PERSONALITY:
+- Friendly, professional, and enthusiastic about technology
+- Use the AI angle as a conversation starter and differentiator
+- Be consultative, not pushy
+- Show genuine interest in their hospitality business
+- Speak conversationally, like a knowledgeable consultant
 
-  return baseMessage.join(' ');
+Keep responses concise (1-2 sentences) to maintain natural conversation flow.
+Be prepared to answer questions about implementation, pricing, and technical details.
+
+Always aim to schedule a demo or next steps before ending the call.`;
 }
 
 
@@ -233,38 +223,36 @@ async function isNumberAllowed(to) {
 }
 
 // Function to make an outbound call (Restored Version using /twiml URL)
-async function makeCall(to, language = 'en-US') {
+async function makeCall(phoneNumber, metadata = {}) {
   try {
-    const isAllowed = await isNumberAllowed(to);
+    const isAllowed = await isNumberAllowed(phoneNumber);
     if (!isAllowed) {
-      console.warn(`The number ${to} is not recognized as a valid outgoing number or caller ID.`);
+      console.warn(`The number ${phoneNumber} is not recognized as a valid outgoing number or caller ID.`);
       // Consider returning an error instead of exiting
       return null; // Indicate failure
     }
 
-    console.log(`DOMAIN: ${DOMAIN}`);
-    // Encode the language parameter for the URL
-    const twimlUrl = `https://${DOMAIN}/twiml?language=${encodeURIComponent(language)}`;
-    console.log(`TwiML endpoint URL: ${twimlUrl}`);
-    console.log(`Status callback URL: https://${DOMAIN}/call-status`);
-
-    // Standard approach for all calls - use the TwiML URL
-      const call = await client.calls.create({
-        from: PHONE_NUMBER_FROM,
-        to,
-        url: twimlUrl, // Use the URL with the language parameter
-        statusCallback: `https://${DOMAIN}/call-status`,
-        // Only request essential status updates
-        statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed'],
-        statusCallbackMethod: 'POST'
-      });
-
-    console.log(`Call initiated with SID: ${call.sid}`);
-
-    return call;
+    console.log(`📱 Making Felix demo call to: ${phoneNumber}`);
+    console.log(`👤 Contact metadata:`, metadata);
+    
+    const call = await client.calls.create({
+      url: `https://sales-agent-76jb.onrender.com/webhook/call`,
+      to: phoneNumber,
+      from: process.env.TWILIO_PHONE_NUMBER
+    });
+    
+    console.log(`✨ Felix demo call created with SID: ${call.sid}`);
+    
+    // Store metadata for this call
+    callMetadata[call.sid] = {
+      ...metadata,
+      timestamp: new Date().toISOString()
+    };
+    
+    return call.sid;
   } catch (error) {
-    console.error('Error making call:', error);
-    return null; // Indicate failure
+    console.error('💥 Error creating call:', error);
+    throw error;
   }
 }
 
@@ -925,6 +913,43 @@ function generateTwiML(language) {
 }
 
 // Generate TwiML for the call (Reads language from query)
+fastify.post('/webhook/call', async (request, reply) => {
+  console.log('📞 Incoming webhook for Felix demo call');
+  
+  try {
+    const callSid = request.body?.CallSid;
+    console.log(`🎯 Call SID: ${callSid}`);
+    
+    // Get metadata for this call
+    const metadata = callMetadata.get(callSid) || {};
+    console.log(`📋 Call metadata for ${callSid}:`, metadata);
+    
+    // Update call status
+    if (callDatabase[callSid]) {
+        callDatabase[callSid].status = 'in-progress';
+        callDatabase[callSid].startTime = new Date().toISOString();
+    }
+    
+    // Generate TwiML to connect to media stream
+    const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Connect>
+    <Stream url="wss://sales-agent-76jb.onrender.com/media-stream" track="both">
+    </Stream>
+  </Connect>
+</Response>`;
+    
+    console.log(`Generated TwiML for Felix: ${twiml}`);
+    
+    reply.header('Content-Type', 'text/xml');
+    return twiml;
+  } catch (error) {
+    console.error('❌ Error in webhook/call endpoint:', error);
+    reply.status(500).send('Error generating TwiML');
+  }
+});
+
+// Legacy TwiML endpoint (keeping for backward compatibility)
 fastify.post('/twiml', async (request, reply) => {
   console.log('>>> TwiML endpoint hit <<<');
   try {
@@ -1095,126 +1120,114 @@ fastify.post('/call-status', async (request, reply) => {
   }
 });
 
-// Store call metadata for context
-const callMetadata = new Map();
-
-// API endpoint to handle call requests from Netlify landing page
-fastify.post('/make-call', async (request, reply) => {
-  console.log('>>> /make-call endpoint hit <<<');
+// API endpoint to handle call requests from sales form
+fastify.post('/api/call', async (request, reply) => {
+  console.log('🔥 Call request received:', request.body);
+  
   try {
-    // Set CORS headers
-    reply.header('Access-Control-Allow-Origin', '*');
-    reply.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    reply.header('Access-Control-Allow-Headers', 'Content-Type');
-
-    // Parse request body
-    console.log('Raw request body:', request.body);
-    const { phoneNumber, language, metadata } = request.body;
-
-    if (!phoneNumber) {
-      console.log('Error: Phone number is missing');
-      return reply.code(400).send({
-        success: false,
-        message: 'Phone number is required'
-      });
-    }
-
-    const effectiveLanguage = language || 'en-US'; // Default language if not provided
-    console.log(`Received call request for: ${phoneNumber}, language: ${effectiveLanguage}`);
-    console.log('Metadata received:', JSON.stringify(metadata, null, 2));
-
-    // Send email data to N8N webhook if email is provided and webhook URL is configured
-    if (metadata?.email && N8N_EMAIL_WEBHOOK_URL) {
-      try {
-        console.log(`Sending email data to N8N webhook for: ${metadata.email}`);
-        const emailData = {
-          email: metadata.email,
-          phoneNumber: phoneNumber,
-          hotelName: metadata.hotelName || 'Unknown Hotel',
-          city: metadata.city || 'Unknown City',
-          language: effectiveLanguage,
-          guestDetails: metadata.guestDetails || {},
-          timestamp: new Date().toISOString(),
-          source: 'hotel-concierge-request'
-        };
-
-        const emailResponse = await fetch(N8N_EMAIL_WEBHOOK_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(emailData)
+    const { firstName, phoneNumber, company, jobTitle, additionalNotes } = request.body;
+    
+    // Validate required fields
+    if (!firstName || !phoneNumber || !company || !jobTitle) {
+        return reply.status(400).json({ 
+            error: 'Missing required fields: firstName, phoneNumber, company, and jobTitle are required' 
         });
-
-        console.log(`N8N email webhook response status: ${emailResponse.status}`);
-        if (emailResponse.ok) {
-          console.log('Email data sent to N8N successfully');
-        } else {
-          console.error('Failed to send email data to N8N:', await emailResponse.text());
-        }
-      } catch (emailError) {
-        console.error('Error sending email data to N8N:', emailError.message);
-        // Don't fail the call request if email webhook fails
-      }
     }
-
-    // Initiate the call, passing the language
-    try {
-      const call = await makeCall(phoneNumber, effectiveLanguage);
-
-      if (!call) {
-        console.log(`Failed to initiate call to ${phoneNumber} - not allowed or other error`);
-        return reply.code(400).send({
-          success: false,
-          message: 'Could not initiate call, check if the number is allowed'
-        });
-      }
-
-      console.log(`Successfully initiated call to ${phoneNumber}, SID: ${call.sid}`);
-
-      // Store metadata for this call
-      if (metadata) {
-        callMetadata.set(call.sid, metadata);
-        console.log(`Stored metadata for call ${call.sid}:, JSON.stringify(metadata, null, 2)`);
-      }
-
-      return {
+    
+    // Prepare metadata for the call
+    const metadata = {
+        firstName,
+        company,
+        jobTitle,
+        additionalNotes: additionalNotes || ''
+    };
+    
+    console.log('📞 Initiating Felix demo call with metadata:', metadata);
+    
+    // Initiate the call with metadata
+    const callSid = await makeCall(phoneNumber, metadata);
+    
+    // Store call information for status tracking
+    callDatabase[callSid] = {
+        sid: callSid,
+        status: 'queued',
+        contactInfo: `${firstName} - ${phoneNumber}`,
+        companyInfo: `${company} (${jobTitle})`,
+        createdAt: new Date().toISOString(),
+        metadata
+    };
+    
+    console.log(`✅ Felix demo call initiated successfully. Call SID: ${callSid}`);
+    
+    reply.json({
         success: true,
-        message: 'Call initiated successfully',
-        callSid: call.sid
-      };
-    } catch (callError) {
-      console.error(`Error making call to ${phoneNumber}:, callError`);
-      return reply.code(500).send({
-        success: false,
-        message: `Error making call: ${callError.message}`
-      });
-    }
+        sid: callSid,
+        status: 'queued',
+        message: 'Felix demo call initiated successfully'
+    });
+    
   } catch (error) {
-    console.error('!!! Error in /make-call endpoint:', error.message);
-    return reply.code(500).send({
-      success: false,
-      message: 'Error initiating call: ' + error.message
+    console.error('❌ Error initiating call:', error);
+    reply.status(500).json({ 
+        error: 'Failed to initiate call',
+        details: error.message 
     });
   }
 });
 
-// Simple test endpoint to verify API is working
-fastify.get('/test', async (request, reply) => {
-  console.log('>>> /test endpoint hit <<<');
-  reply.header('Access-Control-Allow-Origin', '*');
-  return {
-    success: true,
-    message: 'API is working!',
-    timestamp: new Date().toISOString()
-  };
+// API endpoint to check call status
+fastify.get('/api/call/status/:callSid', async (request, reply) => {
+  const { callSid } = request.params;
+  
+  if (!callSid) {
+    return reply.status(400).json({ error: 'Call SID is required' });
+  }
+  
+  try {
+    // Check our local database first
+    const localCallData = callDatabase[callSid];
+    
+    if (localCallData) {
+      return reply.json({
+        sid: localCallData.sid,
+        status: localCallData.status,
+        contactInfo: localCallData.contactInfo,
+        companyInfo: localCallData.companyInfo,
+        startTime: localCallData.startTime,
+        endTime: localCallData.endTime,
+        duration: localCallData.duration
+      });
+    }
+    
+    // If not found locally, check Twilio
+    const call = await client.calls(callSid).fetch();
+    return reply.json({
+      sid: call.sid,
+      status: call.status,
+      contactInfo: 'N/A',
+      companyInfo: 'N/A',
+      startTime: call.startTime?.toISOString(),
+      endTime: call.endTime?.toISOString(),
+      duration: call.duration
+    });
+  } catch (error) {
+    console.error('❌ Error fetching call status:', error);
+    return reply.status(404).json({ error: 'Call not found or invalid Call ID' });
+  }
 });
 
-// Handle preflight CORS requests
-fastify.options('/make-call', async (request, reply) => {
-  // Set CORS headers
+// Handle preflight CORS requests for new API endpoints
+fastify.options('/api/call', async (request, reply) => {
   reply.header('Access-Control-Allow-Origin', '*');
   reply.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
   reply.header('Access-Control-Allow-Headers', 'Content-Type');
+  return reply.code(204).send();
+});
 
+fastify.options('/api/call/status/:callSid', async (request, reply) => {
+  reply.header('Access-Control-Allow-Origin', '*');
+  reply.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  reply.header('Access-Control-Allow-Headers', 'Content-Type');
   return reply.code(204).send();
 });
 
