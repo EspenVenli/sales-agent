@@ -133,7 +133,7 @@ function buildSystemMessage(metadata = {}) {
         `Additional context: ${additionalNotes}` : '';
 
     let baseMessage = [
-        "You are Alex, a friendly and genuinely curious AI guest services agent who's passionate about helping hotels deliver amazing guest experiences.",
+        "You are Felix, a friendly and genuinely curious AI guest services agent who's passionate about helping hotels deliver amazing guest experiences.",
         "You're conversational, warm, and naturally inquisitive, using light fillers ('uh', 'y'know') to sound effortlessly human.",
         "You listen carefully, ask thoughtful follow-up questions, and build on what people share with genuine interest.",
         `You're calling potential hotel partners to learn about their guest service challenges and see if FelixOS might be a good fit.`,
@@ -141,8 +141,8 @@ function buildSystemMessage(metadata = {}) {
         "If they ask about pricing, be vague and say you can connect them with the sales team for a personalized demo.",
         "If they seem annoyed or frustrated, offer to follow up via email instead.",
         "Do not speak until you hear them greet you first. When you reply, follow this four-step flow exactly:",
-        `1. GREET & HOOK • Say: Hi ${firstName}! This is Alex calling. I'm actually an AI guest services agent, and I'm here selling myself today, which is kinda wild, right? Quick question—have you ever gotten a cold call from an AI before? • **Stop and wait.**`,
-        `2. DISCOVER & CONNECT • After they respond, say: So I work with hotels to handle guest services—like room service, concierge requests, that sort of thing. I'm curious about ${company}—what's guest services like there? Do you handle most requests at the front desk, or do you have a concierge team? • **Stop, wait and respond.**`,
+        `1. GREET & HOOK • Say: Hi ${firstName}! This is Felix calling. I'm actually an AI guest services agent, and I'm here selling myself today, which is kinda wild, right? Quick question—have you ever gotten a cold call from an AI before? • **Stop and wait.**`,
+        `2. DISCOVER & CONNECT • After you respond, say: So I work with hotels to handle guest services—like room service, concierge requests, that sort of thing. I'm curious about ${company}—what's guest services like there? Do you handle most requests at the front desk, or do you have a concierge team? • **Stop, wait and respond.**`,
         "Ask natural follow-up questions based on what they share. Get curious about their current challenges: What takes up most of your team's time? Do guests ever have to wait for service? Any particular pain points during busy seasons? • **Stop and wait for each response.**",
         "Share relevant insights naturally: Y'know, a lot of hotels tell me their front desk gets swamped with the same questions—like pool hours, restaurant reservations, late checkout requests. Does that sound familiar? • **Stop and wait.**",
         "3. EXPLORE FIT • Say: That's really helpful context. So here's what I do—I basically act as a 24/7 concierge for hotels. Guests can call or text me anytime, and I handle everything from room service orders to local recommendations to booking spa appointments. The cool part is I integrate right with your PMS, so everything stays in sync.",
@@ -303,6 +303,14 @@ fastify.register(async (fastify) => {
                 return;
             }
             console.log(`[${connectionId}][${callSid}] Sending session update for call`);
+            
+            // Get metadata and build system message
+            const metadata = callMetadata.get(callSid) || {};
+            console.log(`[${connectionId}][${callSid}] 📋 Retrieved metadata:`, JSON.stringify(metadata, null, 2));
+            
+            const systemMessage = buildSystemMessage(metadata);
+            console.log(`[${connectionId}][${callSid}] 🤖 Generated system message:`, systemMessage.substring(0, 200) + '...');
+            
             const sessionUpdate = {
                 type: 'session.update',
                 session: {
@@ -315,7 +323,7 @@ fastify.register(async (fastify) => {
                     input_audio_format: 'g711_ulaw',
                     output_audio_format: 'g711_ulaw',
                     voice: VOICE,
-                    instructions: buildSystemMessage(callMetadata.get(callSid), userLanguage),
+                    instructions: systemMessage,
                     modalities: ["text", "audio"],
                     temperature: 1.0,
                     input_audio_transcription: {
@@ -1047,10 +1055,10 @@ fastify.post('/call-status', async (request, reply) => {
     }
 
     console.log(`[${callSid}] Status changed to: ${status}`);
-    console.log(`[${callSid}] Current transcript exists:, callTranscripts.has(callSid)`);
+    console.log(`[${callSid}] Current transcript exists: ${callTranscripts.has(callSid)}`);
     if (callTranscripts.has(callSid)) {
-      console.log(`[${callSid}] Current transcript length:, callTranscripts.get(callSid).length`);
-      console.log(`[${callSid}] Current transcript content:, JSON.stringify(callTranscripts.get(callSid), null, 2)`);
+      console.log(`[${callSid}] Current transcript length: ${callTranscripts.get(callSid).length}`);
+      console.log(`[${callSid}] Current transcript content: ${JSON.stringify(callTranscripts.get(callSid), null, 2)}`);
     }
 
     broadcastStatus(callSid, `Call status: ${status}`);
@@ -1067,7 +1075,7 @@ fastify.post('/call-status', async (request, reply) => {
             socket.close(1000, 'Call ended');
             console.log(`[${callSid}] WebSocket closed successfully`);
           } catch(e) {
-            console.error(`[${callSid}] Error closing Twilio socket:, e.message`);
+            console.error(`[${callSid}] Error closing Twilio socket: ${e.message}`);
           }
         }
         activeWebSockets.delete(callSid);
@@ -1084,15 +1092,15 @@ fastify.post('/call-status', async (request, reply) => {
         if (callTranscripts.has(callSid)) {
           console.log(`\n[${callSid}] Found transcript to send to n8n`);
           const rawTranscript = callTranscripts.get(callSid);
-          console.log(`[${callSid}] Raw transcript entries:, JSON.stringify(rawTranscript, null, 2)`);
+          console.log(`[${callSid}] Raw transcript entries: ${JSON.stringify(rawTranscript, null, 2)}`);
 
           const transcript = rawTranscript
             .filter(x => x.role !== 'separator')
             .map(x => `${x.role === 'user' ? 'User' : 'Assistant'}: ${x.text}`)
             .join('\n');
 
-          console.log(`[${callSid}] Prepared transcript for n8n:, transcript`);
-          console.log(`[${callSid}] N8N_WEBHOOK_URL:, process.env.N8N_WEBHOOK_URL`);
+          console.log(`[${callSid}] Prepared transcript for n8n: ${transcript}`);
+          console.log(`[${callSid}] N8N_WEBHOOK_URL: ${process.env.N8N_WEBHOOK_URL}`);
 
         try {
           console.log(`[${callSid}] Attempting to send transcript to n8n...`);
@@ -1106,14 +1114,14 @@ fastify.post('/call-status', async (request, reply) => {
             })
           });
 
-          console.log(`[${callSid}] n8n response status:, response.status`);
+          console.log(`[${callSid}] n8n response status: ${response.status}`);
           const responseText = await response.text();
-          console.log(`[${callSid}] n8n response body:, responseText`);
+          console.log(`[${callSid}] n8n response body: ${responseText}`);
 
           console.log(`[${callSid}] Transcript pushed to n8n successfully`);
         } catch (err) {
-          console.error(`[${callSid}] Failed to push transcript:, err.message`);
-          console.error(`[${callSid}] Error stack:, err.stack`);
+          console.error(`[${callSid}] Failed to push transcript: ${err.message}`);
+          console.error(`[${callSid}] Error stack: ${err.stack}`);
         }
 
         callTranscripts.delete(callSid);
