@@ -358,9 +358,9 @@ fastify.register(async (fastify) => {
                 session: {
                     turn_detection: {
                         type: 'server_vad',
-                        threshold: 0.5,
+                        threshold: 0.6,
                         prefix_padding_ms: 300,
-                        silence_duration_ms: 400
+                        silence_duration_ms: 600
                     },
                     input_audio_format: 'g711_ulaw',
                     output_audio_format: 'g711_ulaw',
@@ -376,6 +376,7 @@ fastify.register(async (fastify) => {
                 }
             };
             openAiWs.send(JSON.stringify(sessionUpdate));
+            console.log(`[${connectionId}][${callSid}] AI will wait for user's first utterance before responding.`);
             broadcastStatus(callSid, 'Sending session update to OpenAI');
         };
 
@@ -533,27 +534,16 @@ fastify.register(async (fastify) => {
                                 console.log(`[${connectionId}][${callSid}] Session updated. Ready for conversation in ${userLanguage}.`);
                                 broadcastStatus(callSid, 'Session updated - ready for conversation');
 
-                                // DO NOT send response.create here immediately.
-                                // The AI should wait for the user's first utterance or VAD timeout.
-                                // The system prompt "Do not speak until you hear them greet you first" will guide the AI.
-                                // The `response.create` in the 'input_audio_buffer.committed' handler will trigger
-                                // the AI's first response after the user speaks or is silent for the VAD duration.
-                                console.log(`[${connectionId}][${callSid}] AI will wait for user's first utterance before responding.`);
-                                
-                                // Fallback: If no user input after 3 seconds, trigger AI response
-                                setTimeout(() => {
-                                    if (openAiWs && openAiWs.readyState === WebSocket.OPEN && callActive) {
-                                        console.log(`[${connectionId}][${callSid}] Fallback timeout: triggering AI response after 3 seconds of silence`);
-                                        openAiWs.send(JSON.stringify({
-                                            type: 'response.create',
-                                            response: {
-                                                modalities: ["text", "audio"],
-                                                instructions: "Always provide both text and audio responses. Include the text version of everything you say."
-                                            }
-                                        }));
-                                        broadcastStatus(callSid, 'Fallback: AI starting conversation after silence');
+                                // Request initial response from OpenAI (no context message needed since metadata is in system prompt)
+                                console.log(`[${connectionId}][${callSid}] Requesting initial response from OpenAI.`);
+                                openAiWs.send(JSON.stringify({
+                                    type: 'response.create',
+                                    response: {
+                                        modalities: ["text", "audio"],
+                                        instructions: "Always provide both text and audio responses. Include the text version of everything you say."
                                     }
-                                }, 3000); // 3 second fallback timeout
+                                }));
+                                broadcastStatus(callSid, 'Requested initial response');
                                 break;
 
                             case 'input_audio_buffer.speech_started':
