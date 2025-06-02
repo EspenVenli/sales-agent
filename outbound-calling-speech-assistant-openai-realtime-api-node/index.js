@@ -126,7 +126,8 @@ function buildSystemMessage(metadata = {}) {
     const { firstName = '', company = '', industry = '', jobTitle = '', additionalNotes = '' } = metadata;
     
     const contactContext = company ? 
-        `You're calling ${firstName} who works at ${company}${jobTitle ? ` as a ${jobTitle}` : ''}${industry ? ` in the ${industry} industry` : ''}.` ;
+        `You're calling ${firstName} who works at ${company}${jobTitle ? ` as a ${jobTitle}` : ''}${industry ? ` in the ${industry} industry` : ''}.` :
+        `You represent FelixOS, which is the AI operating system built for modern hospitality.`;
     
     const notesContext = additionalNotes ? 
         `Additional context: ${additionalNotes}` : '';
@@ -361,9 +362,9 @@ fastify.register(async (fastify) => {
                 session: {
                     turn_detection: {
                         type: 'server_vad',
-                        threshold: 0.6,
+                        threshold: 0.5,
                         prefix_padding_ms: 300,
-                        silence_duration_ms: 500
+                        silence_duration_ms: 600
                     },
                     input_audio_format: 'g711_ulaw',
                     output_audio_format: 'g711_ulaw',
