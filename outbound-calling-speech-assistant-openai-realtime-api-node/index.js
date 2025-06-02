@@ -292,6 +292,18 @@ fastify.get('/health', async (request, reply) => {
     return { status: 'ok', timestamp: new Date().toISOString(), domain: DOMAIN };
 });
 
+// Debug endpoint to check environment variables
+fastify.get('/debug', async (request, reply) => {
+    return { 
+        status: 'debug',
+        domain: DOMAIN,
+        phoneNumberFrom: PHONE_NUMBER_FROM,
+        twilioAccountSid: TWILIO_ACCOUNT_SID ? 'Set' : 'Missing',
+        openaiApiKey: OPENAI_API_KEY ? 'Set' : 'Missing',
+        timestamp: new Date().toISOString()
+    };
+});
+
 // Test WebSocket connectivity endpoint
 fastify.get('/test-websocket', async (request, reply) => {
     const wsUrl = `wss://${DOMAIN}/media-stream`;
