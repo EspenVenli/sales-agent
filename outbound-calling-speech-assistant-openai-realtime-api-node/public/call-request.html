@@ -239,6 +239,24 @@
             </div>
             
             <div class="form-group">
+                <label for="language">Language *</label>
+                <select id="language" name="language" required>
+                    <option value="">Select Language</option>
+                    <option value="en-US">🇺🇸 English (US)</option>
+                    <option value="en-GB">🇬🇧 English (UK)</option>
+                    <option value="fr-FR">🇫🇷 French</option>
+                    <option value="es-ES">🇪🇸 Spanish</option>
+                    <option value="de-DE">🇩🇪 German</option>
+                    <option value="it-IT">🇮🇹 Italian</option>
+                    <option value="pt-PT">🇵🇹 Portuguese</option>
+                    <option value="nl-NL">🇳🇱 Dutch</option>
+                    <option value="da-DK">🇩🇰 Danish</option>
+                    <option value="sv-SE">🇸🇪 Swedish</option>
+                    <option value="no-NO">🇳🇴 Norwegian</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
                 <label for="jobTitle">Job Title *</label>
                 <input type="text" id="jobTitle" name="jobTitle" placeholder="e.g., General Manager, Operations Director" required>
             </div>
@@ -253,6 +271,12 @@
                 <span class="loading" id="loadingSpinner"></span>
             </button>
         </form>
+        
+        <div style="margin-top: 15px; text-align: center;">
+            <button type="button" id="quickTestButton" class="btn" style="background-color: #95a5a6; font-size: 0.9em;">
+                ⚡ Quick Test (Auto-fill form)
+            </button>
+        </div>
         
         <div class="status" id="requestStatusMessage"></div>
         
@@ -354,6 +378,18 @@
             
             // Add placeholder text to help users
             phoneInput.placeholder = "+1 (555) 123-4567 or +45 12 34 56 78";
+            
+            // Quick test button
+            const quickTestButton = document.getElementById('quickTestButton');
+            quickTestButton.addEventListener('click', function() {
+                document.getElementById('firstName').value = 'Espen';
+                document.getElementById('phoneNumber').value = '+4531219653';
+                document.getElementById('company').value = 'Generator Hostel';
+                document.getElementById('industry').value = 'hospitality';
+                document.getElementById('jobTitle').value = 'General Manager';
+                document.getElementById('language').value = 'en-US';
+                document.getElementById('additionalNotes').value = 'Quick test call - please call immediately';
+            });
             
             // Call Request Form
             const callForm = document.getElementById('callForm');

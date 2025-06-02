@@ -123,7 +123,7 @@ function formatDateForSpeech(raw) {
    Build NATURAL, EXPRESSIVE system prompt for Sales Agent
 ----------------------------------------------------------------*/
 function buildSystemMessage(metadata = {}) {
-    const { firstName = '', company = '', industry = '', jobTitle = '', additionalNotes = '' } = metadata;
+    const { firstName = '', company = '', industry = '', jobTitle = '', additionalNotes = '', language = 'en-US' } = metadata;
     
     const contactContext = company ? 
         `You're calling ${firstName} who works at ${company}${jobTitle ? ` as a ${jobTitle}` : ''}${industry ? ` in the ${industry} industry` : ''}.` :
@@ -158,6 +158,23 @@ function buildSystemMessage(metadata = {}) {
     if (contactContext || notesContext) {
         const contextInfo = [contactContext, notesContext].filter(Boolean).join(' ');
         baseMessage.splice(4, 0, contextInfo);
+    }
+    
+    // Add language-specific instructions
+    if (language !== 'en-US' && language !== 'en-GB') {
+        const languageNames = {
+            'fr-FR': 'French',
+            'es-ES': 'Spanish', 
+            'de-DE': 'German',
+            'it-IT': 'Italian',
+            'pt-PT': 'Portuguese',
+            'nl-NL': 'Dutch',
+            'da-DK': 'Danish',
+            'sv-SE': 'Swedish',
+            'no-NO': 'Norwegian'
+        };
+        const languageName = languageNames[language] || language;
+        baseMessage.push(`IMPORTANT: Conduct the entire conversation in ${languageName}. Speak naturally and fluently in ${languageName} throughout the call.`);
     }
     
     baseMessage.push("Keep responses conversational and natural. Ask one question at a time and wait for responses.");
@@ -225,7 +242,7 @@ async function isNumberAllowed(to) {
 }
 
 // Function to make an outbound call (Restored Version using /twiml URL)
-async function makeCall(phoneNumber, metadata = {}) {
+async function makeCall(phoneNumber, metadata = {}, language) {
   try {
     const isAllowed = await isNumberAllowed(phoneNumber);
     if (!isAllowed) {
@@ -238,7 +255,7 @@ async function makeCall(phoneNumber, metadata = {}) {
     console.log(`👤 Contact metadata:`, metadata);
     
     // Use the simpler /twiml endpoint with language parameter
-    const twimlUrl = `https://${DOMAIN}/twiml?language=en-US`;
+    const twimlUrl = `https://${DOMAIN}/twiml?language=${language}`;
     console.log(`TwiML endpoint URL: ${twimlUrl}`);
 
       const call = await client.calls.create({
@@ -1149,12 +1166,12 @@ fastify.post('/api/call', async (request, reply) => {
   console.log('🔥 Call request received:', request.body);
   
   try {
-    const { firstName, phoneNumber, company, industry, jobTitle, additionalNotes } = request.body;
+    const { firstName, phoneNumber, company, industry, jobTitle, additionalNotes, language } = request.body;
     
-    // Validate required fields (including industry since it's required in the form)
-    if (!firstName || !phoneNumber || !company || !industry || !jobTitle) {
+    // Validate required fields (including industry and language since they're required in the form)
+    if (!firstName || !phoneNumber || !company || !industry || !jobTitle || !language) {
         return reply.status(400).send({ 
-            error: 'Missing required fields: firstName, phoneNumber, company, industry, and jobTitle are required' 
+            error: 'Missing required fields: firstName, phoneNumber, company, industry, jobTitle, and language are required' 
         });
     }
     
@@ -1164,13 +1181,14 @@ fastify.post('/api/call', async (request, reply) => {
         company,
         industry,
         jobTitle,
+        language,
         additionalNotes: additionalNotes || ''
     };
     
     console.log('📞 Initiating Felix demo call with metadata:', metadata);
     
-    // Initiate the call with metadata
-    const callSid = await makeCall(phoneNumber, metadata);
+    // Initiate the call with metadata and language
+    const callSid = await makeCall(phoneNumber, metadata, language);
     
     // Store call information for status tracking
     callDatabase[callSid] = {
