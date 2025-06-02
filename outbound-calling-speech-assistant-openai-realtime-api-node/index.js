@@ -302,7 +302,7 @@ fastify.get('/health', async (request, reply) => {
 
 // Test WebSocket connectivity endpoint
 fastify.get('/test-websocket', async (request, reply) => {
-    const wsUrl = `wss://${DOMAIN}/media-stream`;
+    const wsUrl = `wss://${DOMAIN}/ws/media-stream`;
     return { 
         websocketUrl: wsUrl,
         domain: DOMAIN,
@@ -310,9 +310,24 @@ fastify.get('/test-websocket', async (request, reply) => {
     };
 });
 
+// HTTP fallback for media-stream (when accessed via HTTP instead of WebSocket)
+fastify.get('/media-stream', async (request, reply) => {
+    const upgradeHeader = request.headers['upgrade'];
+    if (upgradeHeader !== 'websocket') {
+        console.log(`❌ HTTP request to WebSocket endpoint from ${request.ip}`);
+        return reply.status(400).send({
+            error: 'This endpoint requires WebSocket upgrade',
+            message: 'Use wss:// protocol to connect to this endpoint',
+            websocketUrl: `wss://${DOMAIN}/media-stream`
+        });
+    }
+    // This shouldn't happen, but just in case
+    return reply.status(426).send({ error: 'Upgrade Required' });
+});
+
 // WebSocket route for media-stream
 fastify.register(async (fastify) => {
-    fastify.get('/media-stream', { websocket: true }, (connection, req) => {
+    fastify.get('/ws/media-stream', { websocket: true }, (connection, req) => {
         const connectionId = Math.random().toString(36).substring(2, 10);
         console.log(`>>> /media-stream: Client connected [ID: ${connectionId}]`);
         const connectTime = Date.now();
@@ -961,7 +976,7 @@ fastify.post('/call', async (request, reply) => {
 
 // Function to generate outboundTwML (Now accepts language and callSid)
 function generateTwiML(language, callSid) {
-  const streamUrl = `wss://${DOMAIN}/media-stream`;
+  const streamUrl = `wss://${DOMAIN}/ws/media-stream`;
   // Use the actual callSid instead of template
   return `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
