@@ -161,7 +161,7 @@ function buildSystemMessage(metadata = {}) {
     baseMessage.push("Remember: Your goal is to understand their challenges, build rapport, and schedule a demo—not to close a sale on this call.");
     baseMessage.push("If they're not interested or seem frustrated, graciously offer to follow up via email and thank them for their time.");
 
-    return baseMessage.join(' ');
+  return baseMessage.join(' ');
 }
 
 
@@ -237,16 +237,16 @@ async function makeCall(phoneNumber, metadata = {}) {
     // Use the simpler /twiml endpoint with language parameter
     const twimlUrl = `https://${DOMAIN}/twiml?language=en-US`;
     console.log(`TwiML endpoint URL: ${twimlUrl}`);
-    
-    const call = await client.calls.create({
+
+      const call = await client.calls.create({
       url: twimlUrl,
       to: phoneNumber,
-      from: PHONE_NUMBER_FROM,
-      statusCallback: `https://${DOMAIN}/call-status`,
-      statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed'],
-      statusCallbackMethod: 'POST'
-    });
-    
+        from: PHONE_NUMBER_FROM,
+        statusCallback: `https://${DOMAIN}/call-status`,
+        statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed'],
+        statusCallbackMethod: 'POST'
+      });
+
     console.log(`✨ Felix demo call created with SID: ${call.sid}`);
     
     // Store metadata for this call
@@ -360,20 +360,20 @@ fastify.register(async (fastify) => {
                     turn_detection: {
                         type: 'server_vad',
                         threshold: 0.5,
-                        prefix_padding_ms: 200,
-                        silence_duration_ms: 500
+                        prefix_padding_ms: 300,
+                        silence_duration_ms: 400
                     },
                     input_audio_format: 'g711_ulaw',
                     output_audio_format: 'g711_ulaw',
                     voice: VOICE,
                     instructions: systemMessage,
                     modalities: ["text", "audio"],
-                    temperature: 0.8,
+                    temperature: 1.0,
                     input_audio_transcription: {
                         model: "whisper-1"
                     },
                     tool_choice: "none",
-                    max_response_output_tokens: 2048
+                    max_response_output_tokens: 4096
                 }
             };
             openAiWs.send(JSON.stringify(sessionUpdate));
@@ -493,7 +493,7 @@ fastify.register(async (fastify) => {
 
                 openAiWs.on('open', () => {
                     console.log(`[${connectionId}][${callSid}] OpenAI WebSocket connected successfully.`);
-                    console.log(`[${connectionId}][${callSid}] 🎯 INTERRUPTION SYSTEM: VAD configured with threshold=0.5, padding=200ms, silence=500ms`);
+                    console.log(`[${connectionId}][${callSid}] 🎯 INTERRUPTION SYSTEM: VAD configured with threshold=0.6, padding=300ms, silence=800ms`);
                     // Now that it's open AND we know callSid exists (because setupOpenAI is called after start event),
                     // send the session update.
                      if (callSid && callActive) {
@@ -733,32 +733,32 @@ fastify.register(async (fastify) => {
                             default:
                                 // Log other event types if necessary, already handled by LOG_EVENT_TYPES check above
                                 break;
-                        }
-                    } catch (error) {
-                                console.error(`[${connectionId}][${callSid}] Error handling OpenAI message:, error.message`);
-                                broadcastStatus(callSid, `Error handling OpenAI message: ${error.message}`);
-                            }
-                        });
-
-                openAiWs.on('close', () => {
-                            console.log(`[${connectionId}][${callSid}] OpenAI WebSocket closed.`);
-                    if (callSid) {
-                                activeWebSockets.delete(callSid);
-                                callActive = false;
-                                broadcastStatus(callSid, 'OpenAI WebSocket closed');
+                }
+            } catch (error) {
+                        console.error(`[${connectionId}][${callSid}] Error handling OpenAI message:, error.message`);
+                        broadcastStatus(callSid, `Error handling OpenAI message: ${error.message}`);
                     }
                 });
 
-                openAiWs.on('error', (error) => {
-                            console.error(`[${connectionId}][${callSid}] OpenAI WebSocket error:, error.message`);
-                        broadcastStatus(callSid, `OpenAI WebSocket error: ${error.message}`);
-                        });
+        openAiWs.on('close', () => {
+                    console.log(`[${connectionId}][${callSid}] OpenAI WebSocket closed.`);
+            if (callSid) {
+                        activeWebSockets.delete(callSid);
+                        callActive = false;
+                        broadcastStatus(callSid, 'OpenAI WebSocket closed');
+            }
+        });
 
-                     } catch (error) {
-                        console.error(`[${connectionId}][${callSid}] Error in OpenAI connection setup:, error.message`);
-                        broadcastStatus(callSid, `Error in OpenAI connection setup: ${error.message}`);
-                     }
-                }; // End of setupOpenAIConnection function
+        openAiWs.on('error', (error) => {
+                    console.error(`[${connectionId}][${callSid}] OpenAI WebSocket error:, error.message`);
+                broadcastStatus(callSid, `OpenAI WebSocket error: ${error.message}`);
+                });
+
+             } catch (error) {
+                console.error(`[${connectionId}][${callSid}] Error in OpenAI connection setup:, error.message`);
+                broadcastStatus(callSid, `Error in OpenAI connection setup: ${error.message}`);
+             }
+        }; // End of setupOpenAIConnection function
 
     }); // End of websocket handler
 });
