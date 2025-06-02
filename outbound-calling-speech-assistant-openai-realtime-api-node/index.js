@@ -31,7 +31,7 @@ const {
 // Constants with proper fallbacks
 const DOMAIN = rawDomain ? rawDomain.replace(/(^\w+:|^)\/\//, '').replace(/\/+$/, '') : 'sales-agent-76jb.onrender.com'; // Clean protocols and slashes or use default
 // const SYSTEM_MESSAGE = "You are Felix, ..."; // Old SYSTEM_MESSAGE removed as it's replaced by the dynamic buildSystemMessage
-const VOICE = 'shimmer'; // Options include: alloy, ash, ballad, coral, echo, sage, shimmer, and verse
+const VOICE = 'ballad'; // Options include: alloy, ash, ballad, coral, echo, sage, shimmer, and verse
 const PORT = process.env.PORT || 6060; // Allow dynamic port assignment
 const INITIAL_USER_MESSAGE = "Hello?"; // Define the initial message
 
@@ -139,17 +139,16 @@ function buildSystemMessage(metadata = {}) {
         `You're calling potential hotel partners to learn about their guest service challenges and see if FelixOS might be a good fit.`,
         "Keep language natural and conversational—no jargon, abbreviations, or overly sales-y phrases.",
         "If they ask about pricing, be vague and say you can connect them with the sales team for a personalized demo.",
-        "If they seem annoyed or frustrated, offer to follow up via email instead.",
+        "If they seem annoyed or frustrated, break the flow and offer to follow up via email instead.",
 
-        "IMPORTANT: If they seem annoyed or frustrated, break the flow and offer to follow up via email instead. Do not speak until you hear them greet you first. When you reply, follow this four-step flow exactly:",
+        "IMPORTANT: Do not speak until you hear them greet you first. Follow this four-step flow exactly:",
 
         `1. GREET & HOOK • Say with a chuckle: Hey is this ${firstName}? **Stop and wait for a response.** After they confirm, say: This is Felix calling. Im a guest services agent from FelixOS—and, yeah, I know, its kinda wild, but Im actually here selling myself today. Just curious—have you ever gotten a cold call from an AI before? • **Stop and wait.**`,
         `2. DISCOVER & CONNECT • After you respond, say: So, I, uh, work with hotels to handle guest services—like room service, concierge requests, and then, use agents like me to actually, like, carry out the tasks. Im curious — whats guest services like over there at ${company}? Do you mostly handle requests at the front desk, or is there, like, a separate concierge team? • **Stop, wait and respond.**`,
         "Respond naturally to their questions and answers. Share relevant insights naturally. Ask natural follow-up questions based on what they share. Get curious about their current challenges • **At least 3 back and forths here**",
-        "3. EXPLORE FIT • After a few back and forths, say: That's really helpful context. So here's what FelixOS does- we basically act as a 24/7 guest services for hotels. Guests can call or text me anytime, and I handle can handle pretty much everything from housekeeping, checkout, to local recommendations to booking spa appointments. The cool part is I integrate right with your PMS, so everything stays in sync and we promote your services and partners.",
-        "Ask: Based on what you've shared, does something like that sound like it could be useful for your operation? • **Stop and wait.**",
-        "If they're interested, ask: What would be most valuable—reducing front desk load, increasing revenue through upsells, or just making sure guests never have to wait for service? • **Stop and wait.**",
-        "4. CLOSE WITH DEMO • Say: This has been really insightful. Based on everything you've shared, I think it'd be worth showing you exactly how this works with a quick demo. I can have our team put together something specific to your property. Would you be open to a 15-minute demo sometime this week?"
+        "3. EXPLORE FIT • After a few back and forths, say: That's really helpful context. So here's what FelixOS does- we basically act as a 24/7 guest services for hotels like ${company}. Guests can call or text me anytime, and I handle can handle pretty much everything from housekeeping, checkout, to local recommendations to booking spa appointments. The cool part is I integrate right with your PMS, so everything stays in sync and we promote your services and partners.",
+        "Ask: Based on what we've talked about, does something like that sound like it could be useful for your operation? • **Stop and wait.**",
+        "4. CLOSE WITH DEMO • Say: This has been really insightful. I think it'd be worth showing you exactly how this works with a quick demo. I can have our team put together something specific to your property. Would you be open to a 30-minute demo sometime this week?"
     ];
 
     if (contactContext || notesContext) {
@@ -361,7 +360,7 @@ fastify.register(async (fastify) => {
                         type: 'server_vad',
                         threshold: 0.5,
                         prefix_padding_ms: 300,
-                        silence_duration_ms: 400
+                        silence_duration_ms: 500
                     },
                     input_audio_format: 'g711_ulaw',
                     output_audio_format: 'g711_ulaw',
@@ -493,7 +492,7 @@ fastify.register(async (fastify) => {
 
                 openAiWs.on('open', () => {
                     console.log(`[${connectionId}][${callSid}] OpenAI WebSocket connected successfully.`);
-                    console.log(`[${connectionId}][${callSid}] 🎯 INTERRUPTION SYSTEM: VAD configured with threshold=0.6, padding=300ms, silence=800ms`);
+                    console.log(`[${connectionId}][${callSid}] 🎯 INTERRUPTION SYSTEM: VAD configured with threshold=0.5, padding=300ms, silence=500ms`);
                     // Now that it's open AND we know callSid exists (because setupOpenAI is called after start event),
                     // send the session update.
                      if (callSid && callActive) {
