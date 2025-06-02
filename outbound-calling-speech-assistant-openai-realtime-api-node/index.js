@@ -143,8 +143,8 @@ function buildSystemMessage(metadata = {}) {
 
         "IMPORTANT: If they seem annoyed or frustrated, break the flow and offer to follow up via email instead. Do not speak until you hear them greet you first. When you reply, follow this four-step flow exactly:",
 
-        `1. GREET & HOOK • Say with a chuckle: Hey is this ${firstName}? **Stop and wait for a response.** After they confirm, say: This is Felix calling. Im actually a guest services agent from FelixOS, and I guess Im, like, selling myself today, which is kinda wild, right? Quick question—have you ever gotten a cold call from an AI before? • **Stop and wait.**`,
-        `2. DISCOVER & CONNECT • After you respond, say: So, I, uh, work with hotels to handle guest services—like room service, concierge requests, and then, use agents like me to actually, like, carry out the tasks. Im curious — whats guest services like over there at ${company}? Do you mostly handle requests at the front desk, or is there, like, a separate concierge team? • **Stop, wait and respond.**`,
+        `1. GREET & HOOK • Say with a chuckle: Hey is this ${firstName}? **Stop and wait for a response.** After they confirm, say: This is Felix calling. Im a guest services agent from FelixOS—and, yeah, I know, its kinda wild, but Im actually here selling myself today. Just curious—have you ever gotten a cold call from an AI before? • **Stop and wait.**`,
+        `2. DISCOVER & CONNECT • After you respond to their answer, say: So work with hotels to handle guest services—like room service, concierge requests, and then, use agents like me to actually, like, carry out the tasks. Im curious — whats guest services like over there at ${company}? Do you mostly handle requests at the front desk, or is there, like, a separate concierge team? • **Stop, wait and respond.**`,
         "Respond naturally to their questions and answers. Share relevant insights naturally. Ask natural follow-up questions based on what they share. Get curious about their current challenges • **Stop and wait for each response.**",
         "3. EXPLORE FIT • After a few back and forths, say: That's really helpful context. So here's what I do—I basically act as a 24/7 concierge for hotels. Guests can call or text me anytime, and I handle everything from room service orders to local recommendations to booking spa appointments. The cool part is I integrate right with your PMS, so everything stays in sync.",
         "Ask: Based on what you've shared, does something like that sound like it could be useful for your operation? • **Stop and wait.**",
@@ -359,21 +359,21 @@ fastify.register(async (fastify) => {
                 session: {
                     turn_detection: {
                         type: 'server_vad',
-                        threshold: 0.6,
-                        prefix_padding_ms: 300,
-                        silence_duration_ms: 800
+                        threshold: 0.5,
+                        prefix_padding_ms: 200,
+                        silence_duration_ms: 500
                     },
                     input_audio_format: 'g711_ulaw',
                     output_audio_format: 'g711_ulaw',
                     voice: VOICE,
                     instructions: systemMessage,
                     modalities: ["text", "audio"],
-                    temperature: 1.0,
+                    temperature: 0.8,
                     input_audio_transcription: {
                         model: "whisper-1"
                     },
                     tool_choice: "none",
-                    max_response_output_tokens: 4096
+                    max_response_output_tokens: 2048
                 }
             };
             openAiWs.send(JSON.stringify(sessionUpdate));
@@ -493,7 +493,7 @@ fastify.register(async (fastify) => {
 
                 openAiWs.on('open', () => {
                     console.log(`[${connectionId}][${callSid}] OpenAI WebSocket connected successfully.`);
-                    console.log(`[${connectionId}][${callSid}] 🎯 INTERRUPTION SYSTEM: VAD configured with threshold=0.6, padding=300ms, silence=800ms`);
+                    console.log(`[${connectionId}][${callSid}] 🎯 INTERRUPTION SYSTEM: VAD configured with threshold=0.5, padding=200ms, silence=500ms`);
                     // Now that it's open AND we know callSid exists (because setupOpenAI is called after start event),
                     // send the session update.
                      if (callSid && callActive) {
