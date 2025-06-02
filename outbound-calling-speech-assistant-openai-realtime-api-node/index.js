@@ -951,15 +951,15 @@ fastify.post('/call', async (request, reply) => {
   }
 });
 
-// Function to generate outboundTwML (Now accepts language)
-function generateTwiML(language) {
+// Function to generate outboundTwML (Now accepts language and callSid)
+function generateTwiML(language, callSid) {
   const streamUrl = `wss://${DOMAIN}/media-stream`;
-  // Remove the <Say> verb
+  // Use the actual callSid instead of template
   return `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Connect>
     <Stream url="${streamUrl}">
-      <Parameter name="callSid" value="{{CallSid}}"/>
+      <Parameter name="callSid" value="${callSid}"/>
       <Parameter name="language" value="${language}"/>
     </Stream>
   </Connect>
@@ -979,8 +979,8 @@ fastify.post('/twiml', async (request, reply) => {
     const language = request.query?.language || 'en-US'; // Default to en-US if not provided
     console.log(`TwiML requested for call: ${callSid || 'Unknown'}, Language: ${language}`);
 
-    // Generate TwiML, passing the language
-    const twiml = generateTwiML(language);
+    // Generate TwiML, passing the language and callSid
+    const twiml = generateTwiML(language, callSid);
     console.log(`Generated TwiML: ${twiml}`);
 
   reply.header('Content-Type', 'text/xml');
