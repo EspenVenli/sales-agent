@@ -265,6 +265,14 @@ async function makeCall(phoneNumber, metadata = {}) {
 
 // Initialize Fastify
 const fastify = Fastify();
+
+// Add CORS support globally
+fastify.addHook('onRequest', async (request, reply) => {
+  reply.header('Access-Control-Allow-Origin', '*');
+  reply.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  reply.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+});
+
 fastify.register(fastifyFormBody);
 fastify.register(fastifyWs);
 
@@ -989,6 +997,14 @@ fastify.post('/twiml', async (request, reply) => {
     console.error('!!! Error in /twiml endpoint:', error);
     reply.status(500).send('Error generating TwiML');
   }
+});
+
+// Handle OPTIONS requests for TwiML endpoint
+fastify.options('/twiml', async (request, reply) => {
+  reply.header('Access-Control-Allow-Origin', '*');
+  reply.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  reply.header('Access-Control-Allow-Headers', 'Content-Type');
+  return reply.code(204).send();
 });
 
 // Endpoint to check call status
