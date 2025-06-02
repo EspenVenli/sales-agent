@@ -298,7 +298,13 @@ fastify.get('/', async (request, reply) => {
 fastify.register(async (fastify) => {
     fastify.get('/media-stream', { websocket: true }, (connection, req) => {
         const connectionId = Math.random().toString(36).substring(2, 10);
-        console.log(`>>> /media-stream: Client connected [ID: ${connectionId}]`);
+        const connectTime = Date.now();
+        console.log(`🔗 ========== MEDIA STREAM CLIENT CONNECTED ==========`);
+        console.log(`📋 Connection ID: ${connectionId}`);
+        console.log(`⏰ Connect time: ${new Date().toISOString()}`);
+        console.log(`🌐 Request headers:`, JSON.stringify(req.headers, null, 2));
+        console.log(`📍 Client IP: ${req.ip || req.socket?.remoteAddress || 'unknown'}`);
+        console.log(`🔧 User Agent: ${req.headers?.['user-agent'] || 'unknown'}`);
 
         let callSid = null;
         let openAiWs = null;
@@ -366,40 +372,56 @@ fastify.register(async (fastify) => {
         socket.on('message', (message) => {
              try {
                  const data = JSON.parse(message.toString());
+                 console.log(`[${connectionId}] 📨 Received Twilio event: ${data.event}`);
+                 console.log(`[${connectionId}] 📋 Event data:`, JSON.stringify(data, null, 2));
+                 
                  switch (data.event) {
                      case 'start':
                          streamSid = data.start.streamSid;
                          callSid = data.start.callSid || data.start.customParameters?.callSid;
                          // *** Read language from custom parameters ***
                          userLanguage = data.start.customParameters?.language || 'en-US';
-                         console.log(`[${connectionId}] Incoming stream start event. Stream SID: ${streamSid}, Call SID: ${callSid}, Language: ${userLanguage}`);
+                         console.log(`[${connectionId}] 🚀 STREAM START EVENT`);
+                         console.log(`[${connectionId}] 📋 Stream SID: ${streamSid}`);
+                         console.log(`[${connectionId}] 📋 Call SID: ${callSid}`);
+                         console.log(`[${connectionId}] 🌐 Language: ${userLanguage}`);
+                         console.log(`[${connectionId}] 📋 Custom params:`, JSON.stringify(data.start.customParameters, null, 2));
+                         
                          if (!callSid) {
-                            console.error(`[${connectionId}] No callSid found in start event`);
+                            console.error(`[${connectionId}] ❌ CRITICAL: No callSid found in start event`);
+                            console.error(`[${connectionId}] 📋 Full start data:`, JSON.stringify(data.start, null, 2));
                             try { socket.close(1011, 'No CallSid provided'); } catch(e){}
                             return;
                          }
                          activeWebSockets.set(callSid, socket); // Use the derived socket object
                          callActive = true;
+                         console.log(`[${connectionId}] ✅ Call marked as active for ${callSid}`);
                          broadcastStatus(callSid, 'Call connected, media stream started');
 
                          // Initiate OpenAI connection *after* getting callSid
-                         console.log(`[${connectionId}][${callSid}] Initiating OpenAI connection now...`);
+                         console.log(`[${connectionId}][${callSid}] 🤖 Initiating OpenAI connection now...`);
                          setupOpenAIConnection(); // Call the setup function
                          break;
                      case 'media':
-                         if (!callSid || !callActive) { return; }
+                         if (!callSid || !callActive) { 
+                            console.log(`[${connectionId}] ⚠️ Dropping media - callSid: ${callSid}, active: ${callActive}`);
+                            return; 
+                         }
                          if (openAiWs && openAiWs.readyState === WebSocket.OPEN) {
                             const audioAppend = { type: 'input_audio_buffer.append', audio: data.media.payload };
                             openAiWs.send(JSON.stringify(audioAppend));
+                         } else {
+                            console.log(`[${connectionId}] ⚠️ Dropping media - OpenAI WS not ready. State: ${openAiWs?.readyState || 'null'}`);
                          }
                          break;
                      default:
-                         console.log(`[${connectionId}] Received non-media event:, data.event`);
+                         console.log(`[${connectionId}] 📨 Received non-media event: ${data.event}`);
                          if (callSid) { broadcastStatus(callSid, `Received event: ${data.event}`); }
                          break;
                  }
              } catch (error) {
-                 console.error(`[${connectionId}] Error parsing Twilio message:, error.message`);
+                 console.error(`[${connectionId}] ❌ Error parsing Twilio message: ${error.message}`);
+                 console.error(`[${connectionId}] 📋 Raw message:`, message.toString());
                  if (callSid) { broadcastStatus(callSid, `Error parsing Twilio message: ${error.message}`); }
              }
         });
@@ -937,40 +959,49 @@ function generateTwiML(language) {
 
 // Generate TwiML for the call (Reads language from query)
 fastify.post('/webhook/call', async (request, reply) => {
-  console.log('📞 Incoming webhook for Felix demo call');
-  console.log('Request headers:', JSON.stringify(request.headers, null, 2));
-  console.log('Request body:', JSON.stringify(request.body, null, 2));
+  const startTime = Date.now();
+  console.log('📞 ========== INCOMING WEBHOOK FOR FELIX DEMO CALL ==========');
+  console.log(`⏰ Timestamp: ${new Date().toISOString()}`);
+  console.log('📋 Request headers:', JSON.stringify(request.headers, null, 2));
+  console.log('📋 Request body:', JSON.stringify(request.body, null, 2));
+  console.log('🌐 Request URL:', request.url);
+  console.log('🔧 Request method:', request.method);
   
   try {
     const callSid = request.body?.CallSid;
-    console.log(`🎯 Call SID: ${callSid}`);
+    console.log(`🎯 Extracted Call SID: ${callSid}`);
     console.log(`🌐 Using domain: ${DOMAIN}`);
     console.log(`📱 Phone number from: ${PHONE_NUMBER_FROM}`);
     console.log(`🤖 OpenAI API key configured: ${!!OPENAI_API_KEY}`);
     
     if (!callSid) {
-      console.error('❌ No CallSid provided in webhook');
-      return reply.status(400).header('Content-Type', 'text/xml').send(`<?xml version="1.0" encoding="UTF-8"?>
+      console.error('❌ CRITICAL: No CallSid provided in webhook');
+      const errorTwiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Say>Call configuration error. Please contact support.</Say>
-</Response>`);
+</Response>`;
+      console.log('📤 Sending error TwiML:', errorTwiml);
+      return reply.status(400).header('Content-Type', 'text/xml').send(errorTwiml);
     }
     
     // Get metadata for this call
     const metadata = callMetadata.get(callSid) || {};
-    console.log(`📋 Call metadata for ${callSid}:`, JSON.stringify(metadata, null, 2));
+    console.log(`📋 Retrieved metadata for ${callSid}:`, JSON.stringify(metadata, null, 2));
     
     // Update call status
     if (callDatabase[callSid]) {
         callDatabase[callSid].status = 'in-progress';
         callDatabase[callSid].startTime = new Date().toISOString();
-        console.log(`✅ Updated call status for ${callSid}`);
+        console.log(`✅ Updated call status for ${callSid} to in-progress`);
     } else {
-        console.log(`⚠️ No call data found for ${callSid} in callDatabase`);
+        console.log(`⚠️ WARNING: No call data found for ${callSid} in callDatabase`);
+        console.log(`💾 Current callDatabase keys:`, Object.keys(callDatabase));
     }
     
     // Generate TwiML to connect to media stream using dynamic domain
     const streamUrl = `wss://${DOMAIN}/media-stream`;
+    console.log(`🔗 Generated stream URL: ${streamUrl}`);
+    
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Connect>
@@ -981,18 +1012,23 @@ fastify.post('/webhook/call', async (request, reply) => {
   </Connect>
 </Response>`;
     
-    console.log(`Generated TwiML for Felix with stream URL: ${streamUrl}`);
-    console.log(`Full TwiML: ${twiml}`);
+    console.log(`📤 Generated TwiML for Felix:`, twiml);
+    console.log(`⏱️ Webhook processing time: ${Date.now() - startTime}ms`);
+    console.log('✅ Sending successful TwiML response');
     
     reply.header('Content-Type', 'text/xml');
     return twiml;
   } catch (error) {
-    console.error('❌ Error in webhook/call endpoint:', error);
-    console.error('Error stack:', error.stack);
-    return reply.status(500).header('Content-Type', 'text/xml').send(`<?xml version="1.0" encoding="UTF-8"?>
+    console.error('❌ CRITICAL ERROR in webhook/call endpoint:', error);
+    console.error('📍 Error stack:', error.stack);
+    console.error(`⏱️ Failed after: ${Date.now() - startTime}ms`);
+    
+    const errorTwiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Say>Sorry, there was an error with the call. Please try again later.</Say>
-</Response>`);
+</Response>`;
+    console.log('📤 Sending error TwiML due to exception:', errorTwiml);
+    return reply.status(500).header('Content-Type', 'text/xml').send(errorTwiml);
   }
 });
 
