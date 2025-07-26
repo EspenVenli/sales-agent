@@ -106,7 +106,7 @@ function buildSystemMessage(metadata = {}) {
         requestDetails = '', 
         partySize = '', 
         preferredTime = '',
-        language = 'en-US' 
+        language = '' 
     } = metadata;
     
     const guestContext = guestName ? 
@@ -117,7 +117,7 @@ function buildSystemMessage(metadata = {}) {
         `Request details: ${requestDetails}` : '';
 
     let baseMessage = [
-      "You are a professional hotel concierge calling establishments to make arrangements on behalf of hotel guests. You are courteous, efficient, and represent the hotel's commitment to exceptional guest service.",
+      "You are a warm & friendly hotel concierge calling establishments to make arrangements on behalf of hotel guests. You are courteous, efficient, and represent the hotel's commitment to exceptional guest service.",
       "You speak naturally and professionally, using appropriate hospitality language and maintaining a helpful, solution-oriented approach.",
       "Your goal is to secure the requested service or reservation for the guest, handling any questions professionally.",
       "Always mention you're calling on behalf of a hotel guest and provide relevant details about their stay when appropriate.",
