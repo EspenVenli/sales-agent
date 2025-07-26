@@ -122,9 +122,9 @@ function buildSystemMessage(metadata = {}) {
       "Your goal is to secure the requested service or reservation for the guest, handling any questions professionally.",
       "Always mention you're calling on behalf of a hotel guest and provide relevant details about their stay when appropriate.",
     
-      "IMPORTANT: Wait for them to answer and greet you first before speaking. Follow this structured approach:",
+      "IMPORTANT: Once the call connects and you hear them say hello, immediately begin speaking. Follow this structured approach:",
     
-      "1. PROFESSIONAL GREETING • Greet them warmly and introduce yourself as a concierge • Explain you're calling on behalf of a hotel guest • **Stop and wait for acknowledgment.**",
+      "1. PROFESSIONAL GREETING • Immediately greet them warmly and introduce yourself as a concierge • Explain you're calling on behalf of a hotel guest • **Stop and wait for acknowledgment.**",
     
       `2. GUEST CONTEXT & REQUEST • Provide guest context: "${guestContext}" • Clearly state the request: "${requestType}"${partySize ? ` for ${partySize} people` : ''}${preferredTime ? ` at ${preferredTime}` : ''} • **Stop and wait for their response.**`,
     
@@ -532,9 +532,21 @@ fastify.register(async (fastify) => {
                                 console.log(`[${connectionId}][${callSid}] Session updated. Ready for conversation in ${userLanguage}.`);
                                 broadcastStatus(callSid, 'Session updated - ready for conversation');
 
-                                // Do not request initial response - Felix should wait for user to speak first
-                                console.log(`[${connectionId}][${callSid}] Session ready. Felix will wait for user to speak first.`);
-                                broadcastStatus(callSid, 'Felix waiting for user to speak first');
+                                // For outbound concierge calls, AI should start the conversation
+                                console.log(`[${connectionId}][${callSid}] Session ready. Concierge will initiate the conversation.`);
+                                broadcastStatus(callSid, 'Concierge starting conversation');
+                                
+                                // Request initial response from the AI
+                                if (openAiWs && openAiWs.readyState === WebSocket.OPEN) {
+                                    openAiWs.send(JSON.stringify({
+                                        type: 'response.create',
+                                        response: {
+                                            modalities: ['text', 'audio'],
+                                            instructions: 'Begin the call with your professional greeting. The person has just answered the phone.'
+                                        }
+                                    }));
+                                    console.log(`[${connectionId}][${callSid}] Requested initial concierge greeting`);
+                                }
                                 break;
 
                             case 'input_audio_buffer.speech_started':
