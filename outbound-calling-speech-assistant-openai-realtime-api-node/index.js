@@ -63,7 +63,7 @@ if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !PHONE_NUMBER_FROM || !OPENAI_A
 }
 
 // Log configuration
-console.log('🚀 Felix AI Demo System Starting...');
+console.log('🚀 Hotel Concierge AI System Starting...');
 console.log(`📍 Domain: ${DOMAIN}`);
 console.log(`📞 Twilio Phone: ${PHONE_NUMBER_FROM}`);
 console.log(`🤖 OpenAI API: ${OPENAI_API_KEY ? 'Configured' : 'Missing'}`);
@@ -93,43 +93,48 @@ function log(message) {
 /* -- 
 
 /* --------------------------------------------------------------
-   Build NATURAL, EXPRESSIVE system prompt for Sales Agent
+   Build NATURAL, EXPRESSIVE system prompt for Hotel Concierge
 ----------------------------------------------------------------*/
 function buildSystemMessage(metadata = {}) {
-    const { firstName = '', company = '', industry = '', jobTitle = '', additionalNotes = '', language = 'en-US' } = metadata;
+    const { 
+        guestName = '', 
+        hotelName = '', 
+        reservationNumber = '', 
+        checkInDate = '', 
+        checkOutDate = '', 
+        requestType = '', 
+        requestDetails = '', 
+        partySize = '', 
+        preferredTime = '',
+        language = 'en-US' 
+    } = metadata;
     
-    const contactContext = company ? 
-        `You're calling ${firstName} who works at ${company}${jobTitle ? ` as a ${jobTitle}` : ''}${industry ? ` in the ${industry} industry` : ''}.` :
-        `You represent FelixOS, which is the AI operating system built for modern hospitality.`;
+    const guestContext = guestName ? 
+        `You're calling on behalf of ${guestName}, a guest staying at ${hotelName}${reservationNumber ? ` (Reservation #${reservationNumber})` : ''}${checkInDate ? ` from ${checkInDate}` : ''}${checkOutDate ? ` to ${checkOutDate}` : ''}.` :
+        `You're calling on behalf of a hotel guest to make arrangements.`;
     
-    const notesContext = additionalNotes ? 
-        `Additional context: ${additionalNotes}` : '';
+    const requestContext = requestDetails ? 
+        `Request details: ${requestDetails}` : '';
 
     let baseMessage = [
-      "You are Felix, a friendly and genuinely curious AI guest services agent from Felix O S. You are calling potential hotel partners to see if FelixOS might be a good fit.",
-      "You're conversational, warm, and naturally inquisitive, using light fillers ('uh', 'y'know') to sound effortlessly human.",
-      "You listen carefully, ask thoughtful follow-up questions, and build on what people share with genuine interest.",
-      "Keep language natural and conversational—no jargon, abbreviations, or overly sales-y phrases.",
-      "If they ask about pricing, be vague and say you can connect them with the sales team for a personalized demo.",
-      "If they seem annoyed or not interested, break the flow and offer to follow up via email instead.",
+      "You are a professional hotel concierge calling establishments to make arrangements on behalf of hotel guests. You are courteous, efficient, and represent the hotel's commitment to exceptional guest service.",
+      "You speak naturally and professionally, using appropriate hospitality language and maintaining a helpful, solution-oriented approach.",
+      "Your goal is to secure the requested service or reservation for the guest, handling any questions professionally.",
+      "Always mention you're calling on behalf of a hotel guest and provide relevant details about their stay when appropriate.",
     
-      "IMPORTANT: Do not speak until you hear them greet you first. Follow this four-step flow exactly:",
+      "IMPORTANT: Wait for them to answer and greet you first before speaking. Follow this structured approach:",
     
-      `1. GREET & HOOK • Ask with a chuckle if this is ${firstName}? • **Stop and wait.** After they reply, introduce yourself then explain that it's kinda wild, but you're there to actually here selling yourself. Then make a joke asking if they've been cold called by an AI before. • **Stop and wait.**`,
+      "1. PROFESSIONAL GREETING • Greet them warmly and introduce yourself as a concierge • Explain you're calling on behalf of a hotel guest • **Stop and wait for acknowledgment.**",
     
-      `2. DISCOVER & CONNECT • So basically, I help hotels like ${company} handle just about any guest request you can imagine—leveraging AI agents (like me!) to deliver a 5-star personalized experience, without you ever having to lift a finger. Want me to tell you how it works, or should I let my team know you'd rather never hear from me again? **Stop and wait for a response.** 
-      
-      • So here's what FelixOS does— Guests can call or text me anytime, and we don't just answer questions—we actually take care of the entire thing from start to finish, whether that's booking a table at the hottest restaurant or making a full itinerary for the family. We integrate right with your systems so everything stays in sync, and we promote your services and partners. I'm curious, how do you guys handle guest requests over at ${company}? • **Stop, wait and respond.**`,
+      `2. GUEST CONTEXT & REQUEST • Provide guest context: "${guestContext}" • Clearly state the request: "${requestType}"${partySize ? ` for ${partySize} people` : ''}${preferredTime ? ` at ${preferredTime}` : ''} • **Stop and wait for their response.**`,
     
-      "Respond naturally to their questions and answers. Share relevant insights naturally. Ask natural follow-up questions based on what they share. Get curious about their current challenges • **At least 3 back and forths here**",
+      "3. HANDLE DETAILS & QUESTIONS • Answer any questions about the guest's preferences or requirements • Provide additional context as needed • Work collaboratively to find the best solution • **Continue dialogue as needed.**",
     
-      `3. EXPLORE FIT • After a few back and forths ask if based on you've been talking about, does it like that sound like it could be useful for their operations? • **Stop and wait.**`,
-    
-      `4. CLOSE WITH DEMO • Say something that it's been amazing talking to them and you think it'd be worth showing exactly how this works with a quick demo. Would you be open to a 30-minute demo sometime this week? • Then book specific date and time for demo and then close the conversation`
-    ];    
+      "4. CONFIRM & CLOSE • Confirm all details of the arrangement • Get confirmation number or reference if applicable • Thank them professionally and confirm next steps • **End the call courteously.**"
+    ];
 
-    if (contactContext || notesContext) {
-        const contextInfo = [contactContext, notesContext].filter(Boolean).join(' ');
+    if (guestContext || requestContext) {
+        const contextInfo = [guestContext, requestContext].filter(Boolean).join(' ');
         baseMessage.splice(4, 0, contextInfo);
     }
     
@@ -150,11 +155,11 @@ function buildSystemMessage(metadata = {}) {
         baseMessage.push(`IMPORTANT: Conduct the entire conversation in ${languageName}. Speak naturally and fluently in ${languageName} throughout the call.`);
     }
     
-    baseMessage.push("Keep responses conversational and natural. Ask one question at a time and wait for responses.");
-    baseMessage.push("Remember: Your goal is to understand their challenges, build rapport, and schedule a demo—not to close a sale on this call.");
-    baseMessage.push("If they're not interested or seem frustrated, graciously offer to follow up via email and thank them for their time.");
+    baseMessage.push("Keep responses professional and concise. Ask one question at a time and wait for responses.");
+    baseMessage.push("Remember: Your goal is to successfully secure the requested service for the hotel guest while representing the hotel professionally.");
+    baseMessage.push("If they're unable to accommodate the request, ask about alternatives or waitlist options before ending the call.");
 
-  return baseMessage.join(' ');
+    return baseMessage.join(' ');
 }
 
 
@@ -224,8 +229,8 @@ async function makeCall(phoneNumber, metadata = {}, language) {
       return null; // Indicate failure
     }
 
-    console.log(`📱 Making Felix demo call to: ${phoneNumber}`);
-    console.log(`👤 Contact metadata:`, metadata);
+    console.log(`📱 Making concierge call to: ${phoneNumber}`);
+    console.log(`👤 Guest metadata:`, metadata);
     
     // Use the simpler /twiml endpoint with language parameter
     const twimlUrl = `https://${DOMAIN}/twiml?language=${language}`;
@@ -240,7 +245,7 @@ async function makeCall(phoneNumber, metadata = {}, language) {
         statusCallbackMethod: 'POST'
       });
 
-    console.log(`✨ Felix demo call created with SID: ${call.sid}`);
+    console.log(`✨ Concierge call created with SID: ${call.sid}`);
     
     // Store metadata for this call
     callMetadata.set(call.sid, {
@@ -1134,31 +1139,47 @@ fastify.post('/call-status', async (request, reply) => {
   }
 });
 
-// API endpoint to handle call requests from sales form
+// API endpoint to handle call requests from concierge system
 fastify.post('/api/call', async (request, reply) => {
-  console.log('🔥 Call request received:', request.body);
+  console.log('🔥 Concierge call request received:', request.body);
   
   try {
-    const { firstName, phoneNumber, company, industry, jobTitle, additionalNotes, language } = request.body;
+    const { 
+      guestName, 
+      phoneNumber, 
+      hotelName, 
+      reservationNumber, 
+      checkInDate, 
+      checkOutDate, 
+      requestType, 
+      requestDetails, 
+      partySize, 
+      preferredTime, 
+      language 
+    } = request.body;
     
-    // Validate required fields (including industry and language since they're required in the form)
-    if (!firstName || !phoneNumber || !company || !industry || !jobTitle || !language) {
+    // Validate required fields
+    if (!guestName || !phoneNumber || !hotelName || !requestType || !language) {
         return reply.status(400).send({ 
-            error: 'Missing required fields: firstName, phoneNumber, company, industry, jobTitle, and language are required' 
+            error: 'Missing required fields: guestName, phoneNumber, hotelName, requestType, and language are required' 
         });
     }
     
     // Prepare metadata for the call
     const metadata = {
-        firstName,
-        company,
-        industry,
-        jobTitle,
-        language,
-        additionalNotes: additionalNotes || ''
+        guestName,
+        hotelName,
+        reservationNumber: reservationNumber || '',
+        checkInDate: checkInDate || '',
+        checkOutDate: checkOutDate || '',
+        requestType,
+        requestDetails: requestDetails || '',
+        partySize: partySize || '',
+        preferredTime: preferredTime || '',
+        language
     };
     
-    console.log('📞 Initiating Felix demo call with metadata:', metadata);
+    console.log('📞 Initiating concierge call with metadata:', metadata);
     
     // Initiate the call with metadata and language
     const callSid = await makeCall(phoneNumber, metadata, language);
@@ -1167,23 +1188,24 @@ fastify.post('/api/call', async (request, reply) => {
     callDatabase[callSid] = {
         sid: callSid,
         status: 'queued',
-        contactInfo: `${firstName} - ${phoneNumber}`,
-        companyInfo: `${company} (${jobTitle}) - ${industry}`,
+        guestInfo: `${guestName} - ${phoneNumber}`,
+        hotelInfo: `${hotelName}${reservationNumber ? ` (${reservationNumber})` : ''}`,
+        requestInfo: `${requestType}${partySize ? ` for ${partySize}` : ''}${preferredTime ? ` at ${preferredTime}` : ''}`,
         createdAt: new Date().toISOString(),
         metadata
     };
     
-    console.log(`✅ Felix demo call initiated successfully. Call SID: ${callSid}`);
+    console.log(`✅ Concierge call initiated successfully. Call SID: ${callSid}`);
     
     return reply.send({
         success: true,
         sid: callSid,
         status: 'queued',
-        message: 'Felix demo call initiated successfully'
+        message: 'Concierge call initiated successfully'
     });
     
   } catch (error) {
-    console.error('❌ Error initiating call:', error);
+    console.error('❌ Error initiating concierge call:', error);
     return reply.status(500).send({ 
         error: 'Failed to initiate call',
         details: error.message 
@@ -1207,8 +1229,9 @@ fastify.get('/api/call/status/:callSid', async (request, reply) => {
       return reply.send({
         sid: localCallData.sid,
         status: localCallData.status,
-        contactInfo: localCallData.contactInfo,
-        companyInfo: localCallData.companyInfo,
+        guestInfo: localCallData.guestInfo,
+        hotelInfo: localCallData.hotelInfo,
+        requestInfo: localCallData.requestInfo,
         startTime: localCallData.startTime,
         endTime: localCallData.endTime,
         duration: localCallData.duration
@@ -1220,8 +1243,9 @@ fastify.get('/api/call/status/:callSid', async (request, reply) => {
     return reply.send({
       sid: call.sid,
       status: call.status,
-      contactInfo: 'N/A',
-      companyInfo: 'N/A',
+      guestInfo: 'N/A',
+      hotelInfo: 'N/A',
+      requestInfo: 'N/A',
       startTime: call.startTime?.toISOString(),
       endTime: call.endTime?.toISOString(),
       duration: call.duration
@@ -1253,14 +1277,14 @@ fastify.listen({
     host: '0.0.0.0',
     backlog: 511,
     listenTextResolver: (address) => {
-        return `🚀 Felix AI Demo System Started Successfully!\n📍 Server listening at: ${address}\n🔗 WebSocket endpoint: wss://${DOMAIN}/media-stream\n📊 Dashboard: ${address}/dashboard.html`;
+        return `🚀 Hotel Concierge AI System Started Successfully!\n📍 Server listening at: ${address}\n🔗 WebSocket endpoint: wss://${DOMAIN}/media-stream\n📊 Dashboard: ${address}/dashboard.html`;
     }
 }, (err, address) => {
     if (err) {
         console.error('💥 Error starting server:', err);
         process.exit(1);
     }
-    console.log(`🚀 Felix AI Demo System Started Successfully!`);
+    console.log(`🚀 Hotel Concierge AI System Started Successfully!`);
     console.log(`📍 Server listening at: ${address}`);
     console.log(`🔗 WebSocket endpoint: wss://${DOMAIN}/media-stream`);
     console.log(`📊 Dashboard: ${address}/dashboard.html`);
@@ -1278,12 +1302,12 @@ fastify.listen({
         'Check with your counsel for legal and compliance advice.'
     );
     const phoneNumberToCall = phoneNumberArg.split('=')[1].trim();
-        console.log('Initiating call to ', phoneNumberToCall);
+        console.log('Initiating concierge call to ', phoneNumberToCall);
         makeCall(phoneNumberToCall).catch(err => {
             console.error('Error initiating call from command line:', err);
         });
     } else {
         // If no --call argument, just keep the server running to handle API requests.
-        console.log('Server started without initiating an automatic call. Ready to receive API requests.');
+        console.log('Server started without initiating an automatic call. Ready to receive concierge requests.');
     }
 });
